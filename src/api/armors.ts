@@ -1,10 +1,11 @@
+// src/api/armors.ts
 import { get } from './apiClient';
 
 export interface Armor {
   _id: string;
   name: string;
   class: string;          // "Лёгкий доспех", "Средний доспех", "Тяжёлый доспех"
-  classArmor: string;     // например "Кольчужная рубаха"
+  classArmor: string;     // например "11 + модификатор Лов"
   cost: string;
   needStrong: number;     // требование силы (0 если нет)
   Secrecy: boolean;       // помеха скрытности

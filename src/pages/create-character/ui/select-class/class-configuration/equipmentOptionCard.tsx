@@ -1,15 +1,11 @@
-import { Box, Typography, useTheme, IconButton, Collapse } from '@mui/material';
-import { useState } from 'react';
+// src/pages/create-character/ui/select-class/class-configuration/equipmentOptionCard.tsx
+import { Box, Typography, useTheme, IconButton, Collapse, OutlinedInput, InputAdornment } from '@mui/material';
+import { useState, useEffect, useMemo } from 'react';
+import { searchEquipment } from '../../../../../api/equipment';
+import { EquipmentItemCard } from './EquipmentItemCard';
 import type { EquipmentItem } from '../../../../../api/classes';
-import { useEquipmentDetails } from './hooks/useEquipmentDetails ';
-import type { Armor, Item, Tool, Weapon } from '../../../../../api';
-
-interface EquipmentOptionCardProps {
-  items: EquipmentItem[];
-  selected: boolean;
-  onToggle: () => void;
-  disabled?: boolean;
-}
+import type { Weapon, Armor, Item, Tool } from '../../../../../api';
+import type { EquipmentType } from '../../../../../api/equipment';
 
 const ExpandMoreIcon = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -17,137 +13,96 @@ const ExpandMoreIcon = () => (
   </svg>
 );
 
+const searchIcon = (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+    <line x1="16.5" y1="16.5" x2="21" y2="21" stroke="currentColor" strokeWidth="2" />
+  </svg>
+);
+
+interface Props {
+  items: EquipmentItem[];
+  selected: boolean;
+  onToggle: () => void;
+  disabled?: boolean;
+}
+
+// Функция определения типа предмета по полям (без использования any)
+const getItemType = (item: unknown): EquipmentType => {
+  const obj = item as Record<string, unknown>;
+  if ('damage' in obj && 'damageType' in obj && 'properties' in obj) return 'weapon';
+  if ('classArmor' in obj && 'needStrong' in obj) return 'armor';
+  if ('category' in obj && 'skills' in obj) return 'tool';
+  return 'item';
+};
+
 export const EquipmentOptionCard = ({
   items,
   selected,
   onToggle,
   disabled = false,
-}: EquipmentOptionCardProps) => {
+}: Props) => {
   const theme = useTheme();
   const [showDetails, setShowDetails] = useState(false);
+  const [specificItems, setSpecificItems] = useState<(Weapon | Armor | Item | Tool)[]>([]);
+  const [loadingSpecific, setLoadingSpecific] = useState(false);
+  const [selectedSpecificIndex, setSelectedSpecificIndex] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const itemName = items[0]?.name || '';
-  const { details, loading, error } = useEquipmentDetails(selected ? itemName : ''); // загружаем только если выбрано
+
+  useEffect(() => {
+    if (!selected) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSpecificItems([]);
+       
+      setSelectedSpecificIndex(null);
+       
+      setSearchQuery('');
+      return;
+    }
+
+    const fetchItems = async () => {
+      setLoadingSpecific(true);
+      try {
+        const results = await searchEquipment(itemName);
+        setSpecificItems(results);
+        if (results.length === 1) {
+          setSelectedSpecificIndex(0);
+        } else {
+          setSelectedSpecificIndex(null);
+        }
+        setSearchQuery('');
+      } catch {
+        setSpecificItems([]);
+        setSelectedSpecificIndex(null);
+      } finally {
+        setLoadingSpecific(false);
+      }
+    };
+
+    fetchItems();
+  }, [selected, itemName]);
+
+  const filteredItems = useMemo(() => {
+    if (!searchQuery.trim()) return specificItems;
+    const query = searchQuery.trim().toLowerCase();
+    return specificItems.filter(item => item.name.toLowerCase().includes(query));
+  }, [specificItems, searchQuery]);
 
   const handleToggle = () => {
     if (!disabled) onToggle();
   };
 
-  const handleDetailsToggle = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleDetailsToggle = () => {
     setShowDetails(!showDetails);
   };
 
-  // Рендеринг деталей в зависимости от типа
-  const renderDetails = () => {
-    if (loading) return <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>Загрузка...</Typography>;
-    if (error) return <Typography variant="caption" sx={{ color: theme.palette.error.main }}>Ошибка: {error}</Typography>;
-    if (!details.data) return <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>Нет данных</Typography>;
-
-    const { type, data } = details;
-
-    switch (type) {
-      case 'weapon': {
-        const w = data as Weapon;
-        return (
-          <Box>
-            <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-              Класс: {w.class}
-            </Typography>
-            <br />
-            {w.damage && (
-              <>
-                <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                  Урон: {w.damage} {w.damageType || ''}
-                </Typography>
-                <br />
-              </>
-            )}
-            {w.properties.length > 0 && (
-              <>
-                <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                  Свойства: {w.properties.map(p => p.name).join(', ')}
-                </Typography>
-                <br />
-              </>
-            )}
-            {w.cost && <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>Стоимость: {w.cost}</Typography>}
-            {w.weight && <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>Вес: {w.weight} фунтов</Typography>}
-          </Box>
-        );
-      }
-      case 'armor': {
-        const a = data as Armor;
-        return (
-          <Box>
-            <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-              Тип: {a.class}
-            </Typography>
-            <br />
-            {a.classArmor && (
-              <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                КД: {a.classArmor}
-              </Typography>
-            )}
-            <br />
-            {a.needStrong > 0 && (
-              <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                Требует силы: {a.needStrong}
-              </Typography>
-            )}
-            <br />
-            <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-              Помеха скрытности: {a.Secrecy ? 'Да' : 'Нет'}
-            </Typography>
-            <br />
-            {a.cost && <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>Стоимость: {a.cost}</Typography>}
-            {a.weight && <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>Вес: {a.weight} фунтов</Typography>}
-          </Box>
-        );
-      }
-      case 'tool': {
-        const t = data as Tool;
-        return (
-          <Box>
-            <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-              Категория: {t.category}
-            </Typography>
-            <br />
-            {t.detail && <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>{t.detail}</Typography>}
-            <br />
-            {t.skills.length > 0 && (
-              <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                Навыки: {t.skills.map(s => s.name).join(', ')}
-              </Typography>
-            )}
-            <br />
-            {t.cost && <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>Стоимость: {t.cost}</Typography>}
-            {t.weight && <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>Вес: {t.weight} фунтов</Typography>}
-          </Box>
-        );
-      }
-      case 'item': {
-        const i = data as Item;
-        return (
-          <Box>
-            {i.category && <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>Категория: {i.category}</Typography>}
-            <br />
-            {i.damage_dice && (
-              <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                Урон: {i.damage_dice} {i.damage_type || ''}
-              </Typography>
-            )}
-            <br />
-            {i.description && <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>{i.description}</Typography>}
-            <br />
-            {i.source && <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>Источник: {i.source}</Typography>}
-          </Box>
-        );
-      }
-      default:
-        return <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>Неизвестный тип предмета</Typography>;
-    }
+  const handleSelectItem = (index: number) => {
+    setSelectedSpecificIndex(index);
   };
+
+  const selectedItem = selectedSpecificIndex !== null ? specificItems[selectedSpecificIndex] : null;
 
   return (
     <Box
@@ -156,12 +111,8 @@ export const EquipmentOptionCard = ({
         padding: '12px 16px',
         borderRadius: 2,
         border: '2px solid',
-        borderColor: selected
-          ? theme.palette.primary.main
-          : 'rgba(255,255,255,0.08)',
-        backgroundColor: selected
-          ? 'rgba(170, 59, 255, 0.12)'
-          : 'transparent',
+        borderColor: selected ? theme.palette.primary.main : 'rgba(255,255,255,0.08)',
+        backgroundColor: selected ? 'rgba(170, 59, 255, 0.12)' : 'transparent',
         cursor: disabled ? 'default' : 'pointer',
         transition: 'all 0.25s ease',
         '&:hover': {
@@ -179,22 +130,18 @@ export const EquipmentOptionCard = ({
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         {selected && (
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            style={{ flexShrink: 0 }}
-          >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
             <circle cx="12" cy="12" r="10" fill={theme.palette.primary.main} />
-            <path
-              d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"
-              fill="white"
-            />
+            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" fill="white" />
           </svg>
         )}
         <Typography variant="body2" sx={{ color: theme.palette.common.white, flex: 1 }}>
           {items.map(item => `${item.name} ${item.count > 1 ? `(×${item.count})` : ''}`).join(', ')}
+          {selected && selectedItem && (
+            <span style={{ color: theme.palette.primary.main, marginLeft: 8 }}>
+              → {selectedItem.name}
+            </span>
+          )}
         </Typography>
         {selected && (
           <IconButton
@@ -213,7 +160,50 @@ export const EquipmentOptionCard = ({
 
       <Collapse in={showDetails && selected}>
         <Box sx={{ mt: 1, p: 1, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 1 }}>
-          {renderDetails()}
+          {specificItems.length > 0 && (
+            <OutlinedInput
+              placeholder="Поиск по названию..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              size="small"
+              startAdornment={
+                <InputAdornment position="start" sx={{ color: theme.palette.text.secondary }}>
+                  {searchIcon}
+                </InputAdornment>
+              }
+              sx={{
+                mt: 1,
+                width: '100%',
+                color: theme.palette.common.white,
+                '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' },
+                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: theme.palette.primary.main },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: theme.palette.primary.main },
+              }}
+            />
+          )}
+          {loadingSpecific ? (
+            <Typography sx={{ color: theme.palette.text.secondary, mt: 1 }}>Загрузка...</Typography>
+          ) : filteredItems.length === 0 ? (
+            <Typography variant="caption" sx={{ color: theme.palette.text.secondary, mt: 0.5 }}>
+              {searchQuery ? 'Нет предметов по запросу' : 'Нет доступных предметов'}
+            </Typography>
+          ) : (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 1 }}>
+              {filteredItems.map((item, index) => {
+                const type = getItemType(item);
+                const isSelected = selectedSpecificIndex === index;
+                return (
+                  <EquipmentItemCard
+                    key={index}
+                    item={item}
+                    type={type}
+                    selected={isSelected}
+                    onSelect={() => handleSelectItem(index)}
+                  />
+                );
+              })}
+            </Box>
+          )}
         </Box>
       </Collapse>
     </Box>

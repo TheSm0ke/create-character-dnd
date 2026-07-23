@@ -5,12 +5,12 @@ import { fetchSpellsByClassAndLevel, type Class, type Spell } from '../../../../
 import { useFetch } from '../../../../../api/useFetch';
 import { SelectSkills } from '../selectedSkills';
 import { damageIcons, recommendedSpells } from './constants';
-import { EquipmentSelection } from './equipmentSelection';
 import { useSpellCounts } from './hooks/useSpellCounts';
 import { useSpellFilter } from './hooks/useSpellFilter';
 import { InstrumentsSelection } from './instrumentsSelection';
 import { SubclassSelection } from './subclassSelection';
 import { SpellSelection } from './spellSelection';
+import { EquipmentOptionCard } from './equipmentOptionCard';
 
 interface ClassConfigurationProps {
   classData: Class;
@@ -171,12 +171,40 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
         />
       )}
 
-      <EquipmentSelection
-        fixedEquipment={fixed_equipment}
-        choices={choices}
-        selected={selectedEquipment}
-        onChange={handleEquipmentChange}
-      />
+     {fixed_equipment.length > 0 && (
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="subtitle1" sx={{ color: theme.palette.primary.main }}>
+          Вы получаете:
+        </Typography>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 0.5 }}>
+          {fixed_equipment.map((item, idx) => (
+            <Typography key={idx} variant="body2" sx={{ color: theme.palette.common.white, mr: 1 }}>
+              • {item.name} {item.count > 1 && `(×${item.count})`}
+            </Typography>
+          ))}
+        </Box>
+      </Box>
+    )}
+
+    {choices.map((choice, idx) => (
+      <Box key={idx} sx={{ mb: 3 }}>
+        <Typography variant="subtitle1" sx={{ color: theme.palette.primary.main }}>
+          {choice.description}
+        </Typography>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, mt: 1 }}>
+          {choice.options.map((option, optIdx) => (
+            <Box key={optIdx} sx={{ width: { xs: '100%', sm: 'calc(50% - 8px)', md: 'calc(33.33% - 10px)' } }}>
+              <EquipmentOptionCard
+                items={option}
+                selected={selectedEquipment[idx] === optIdx}
+                onToggle={() => handleEquipmentChange(idx, optIdx)}
+                disabled={false}
+              />
+            </Box>
+          ))}
+        </Box>
+      </Box>
+    ))}
 
       <SubclassSelection
         subclasses={subclasses}

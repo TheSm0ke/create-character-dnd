@@ -1,17 +1,15 @@
-import { SelectRace } from "./ui/select-race/selectRace";
-import { SelectClass } from "./ui/select-class/selectedClass";
-import Stepper from '@mui/material/Stepper';
-import Step from '@mui/material/Step';
-import StepLabel from '@mui/material/StepLabel';
-import { Box, Button, Fade, IconButton, Typography } from "@mui/material";
-import { useState, useCallback, useRef, useEffect } from "react";
+// src/pages/create-character/createCharacter.tsx
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { Box, Button, Fade, IconButton, Typography, Stepper, Step, StepLabel, CircularProgress } from '@mui/material';
+import { SelectRace } from './ui/select-race/selectRace';
+import { SelectClass } from './ui/select-class/selectedClass';
+import { ClassConfiguration } from './ui/select-class/class-configuration/ClassConfiguration';
+import { useFetch } from '../../api/useFetch';
+import { fetchClasses, fetchRaces } from '../../api';
+import type { Race, Class } from '../../api';
 import style from './create-character.module.scss';
-import { fetchClasses, fetchRaces } from "../../api";
-import { useFetch } from "../../api/useFetch";
-import theme from "../../theme";
-import { ArrowDownIcon } from "./arrow-down-icon";
-import type { Race, Class } from "../../api";
-import { ClassConfiguration } from "./ui/select-class/class-configuration/ClassConfiguration";
+import theme from '../../theme';
+import { ArrowDownIcon } from './arrow-down-icon';
 
 const steps = [
   "Выбор расы",
@@ -30,15 +28,15 @@ const CreateCharacter = () => {
   const [selectedClass, setSelectedClass] = useState<Class | null>(null);
   const [classConfig, setClassConfig] = useState<{ skills: string[]; equipment: string[][] } | null>(null);
 
-  const { data: races } = useFetch(fetchRaces);
-  const { data: classes } = useFetch(fetchClasses);
+  console.log(classConfig);
+
+  const { data: races, loading: racesLoading, error: racesError } = useFetch(fetchRaces);
+  const { data: classes, loading: classesLoading, error: classesError } = useFetch(fetchClasses);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollToBottom = () => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   };
-
-  console.log(classConfig);
 
   const isStepOptional = useCallback((step: number) => {
     return step === 1;
@@ -68,11 +66,8 @@ const CreateCharacter = () => {
 
   const handleClassConfirm = (config: { skills: string[]; equipment: string[][] }) => {
     setClassConfig(config);
-    console.log('Конфигурация класса сохранена:', config);
     setActiveStep((prev) => prev + 1);
   };
-
-  console.log('selectedClass', selectedClass);
 
   const previousActiveStepRef = useRef(activeStep);
   const resetButtonRef = useRef<HTMLButtonElement>(null);
@@ -95,7 +90,25 @@ const CreateCharacter = () => {
     }
   }, [activeStep, isStepOptional]);
 
-  console.log("activeStep", activeStep);
+  // Показываем спиннер, пока загружаются расы или классы
+  if (racesLoading || classesLoading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress sx={{ color: theme.palette.primary.main }} />
+      </Box>
+    );
+  }
+
+  // Если ошибка загрузки – показываем сообщение
+  if (racesError || classesError) {
+    return (
+      <Box sx={{ p: 2 }}>
+        <Typography color="error">
+          Ошибка загрузки: {racesError || classesError}
+        </Typography>
+      </Box>
+    );
+  }
 
   return (
     <div className={style.main}>
@@ -118,14 +131,14 @@ const CreateCharacter = () => {
 
       {activeStep === 0 && (
         <SelectRace
-          races={races ?? []}
+          races={races || []}
           selectedRace={selectedRace}
           onSelectRace={setSelectedRace}
         />
       )}
       {activeStep === 1 && (
         <SelectClass
-          classes={classes ?? []}
+          classes={classes || []}
           selectedClass={selectedClass}
           onSelectClass={setSelectedClass}
         />

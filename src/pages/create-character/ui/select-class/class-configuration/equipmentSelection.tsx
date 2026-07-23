@@ -1,9 +1,9 @@
-// src/pages/create-character/ui/select-class/class-configuration/EquipmentSelection.tsx
+// src/pages/create-character/ui/select-class/class-configuration/equipmentSelection.tsx
 import { Box, Typography, useTheme } from '@mui/material';
 import type { EquipmentItem, EquipmentChoice } from '../../../../../api/classes';
 import { EquipmentOptionCard } from './equipmentOptionCard';
 
-interface EquipmentSelectionProps {
+interface Props {
   fixedEquipment: EquipmentItem[];
   choices: EquipmentChoice[];
   selected: { [key: number]: number };
@@ -15,7 +15,7 @@ export const EquipmentSelection = ({
   choices,
   selected,
   onChange,
-}: EquipmentSelectionProps) => {
+}: Props) => {
   const theme = useTheme();
 
   return (
@@ -27,11 +27,7 @@ export const EquipmentSelection = ({
           </Typography>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 0.5 }}>
             {fixedEquipment.map((item, idx) => (
-              <Typography
-                key={idx}
-                variant="body2"
-                sx={{ color: theme.palette.common.white, mr: 1 }}
-              >
+              <Typography key={idx} variant="body2" sx={{ color: theme.palette.common.white, mr: 1 }}>
                 • {item.name} {item.count > 1 && `(×${item.count})`}
               </Typography>
             ))}
@@ -45,23 +41,15 @@ export const EquipmentSelection = ({
             {choice.description}
           </Typography>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, mt: 1 }}>
-            {choice.options.map((option, optIdx) => {
-              const isSelected = selected[idx] === optIdx;
-              const isDisabled = false; // опциональная логика блокировки
-              return (
-                <Box
-                  key={optIdx}
-                  sx={{ width: { xs: '100%', sm: 'calc(50% - 8px)', md: 'calc(33.33% - 10px)' } }}
-                >
-                  <EquipmentOptionCard
-                    items={option}
-                    selected={isSelected}
-                    onToggle={() => onChange(idx, optIdx)}
-                    disabled={isDisabled}
-                  />
-                </Box>
-              );
-            })}
+            {choice.options.map((option, optIdx) => (
+              <Box key={optIdx} sx={{ width: { xs: '100%', sm: 'calc(50% - 8px)', md: 'calc(33.33% - 10px)' } }}>
+                <EquipmentOptionCard
+                  items={option}
+                  selected={selected[idx] === optIdx}
+                  onToggle={() => onChange(idx, optIdx)}
+                />
+              </Box>
+            ))}
           </Box>
         </Box>
       ))}

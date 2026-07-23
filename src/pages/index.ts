@@ -1,1 +1,4 @@
-export {CreateCharacter} from './create-character'
+import CreateCharacter from './create-character/createCharacter';
+
+export { CreateCharacter };
+export default CreateCharacter;
