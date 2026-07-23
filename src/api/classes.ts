@@ -10,26 +10,6 @@ export interface SubclassFeature {
   description: string;
 }
 
-// export interface Subclass {
-//   id: string;
-//   name: string;
-//   description: string;
-//   features: SubclassFeature[];
-//   class_spells?: {
-//     level_requirement: number;
-//     spells: string[];
-//   }[];
-//   source?: string;
-//   special_tables?: {
-//     options: {
-//       effect: string;
-//       value: number;
-//     }[];
-//     roll: string;
-//     title: string;
-//   }[];
-// }
-
 export interface EquipmentChoice {
   description: string;
   options: EquipmentItem[][];

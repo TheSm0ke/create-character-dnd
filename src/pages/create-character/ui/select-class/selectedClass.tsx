@@ -1,4 +1,4 @@
-import { Box, Typography,  Chip, Divider, useMediaQuery, useTheme } from '@mui/material';
+import { Box, Typography, Chip, Divider, useMediaQuery, useTheme } from '@mui/material';
 import type { Class } from '../../../../api';
 
 interface SelectClassProps {
@@ -47,13 +47,8 @@ export const SelectClass = ({ classes, selectedClass, onSelectClass }: SelectCla
                 boxShadow: isSelected ? `0 0 20px ${theme.palette.primary.main}40` : 'none',
                 maxHeight: 500,
                 overflowY: 'auto',
-                '&::-webkit-scrollbar': {
-                  width: 4,
-                },
-                '&::-webkit-scrollbar-thumb': {
-                  background: theme.palette.primary.main,
-                  borderRadius: 4,
-                },
+                '&::-webkit-scrollbar': { width: 4 },
+                '&::-webkit-scrollbar-thumb': { background: theme.palette.primary.main, borderRadius: 4 },
               }}
             >
               <Box

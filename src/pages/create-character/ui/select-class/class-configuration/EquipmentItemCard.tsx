@@ -2,6 +2,7 @@ import { Box, Typography, useTheme, Chip } from '@mui/material';
 import { memo } from 'react';
 import type { Weapon, Armor, Item, Tool } from '../../../../../api';
 import type { EquipmentType } from '../../../../../api/equipment';
+import { damageIcons } from './constants';
 
 interface EquipmentItemCardProps {
   item: Weapon | Armor | Item | Tool;
@@ -24,7 +25,16 @@ export const EquipmentItemCard = memo(({
     if (!disabled) onSelect();
   };
 
-  // Рендерим детали в зависимости от типа
+  // Определяем тип урона для иконки
+  let damageType: string | null = null;
+  if (type === 'weapon') {
+    damageType = (item as Weapon).damageType;
+  } else if (type === 'item') {
+    damageType = (item as Item).damage_type;
+  }
+
+  const damageIcon = damageType ? damageIcons[damageType] : null;
+
   const renderDetails = () => {
     switch (type) {
       case 'weapon': {
@@ -33,7 +43,7 @@ export const EquipmentItemCard = memo(({
           <Box sx={{ mt: 1 }}>
             {w.damage && (
               <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                Урон: {w.damage} {w.damageType || ''}
+                Урон: {w.damage} {w.damageType || ''} {damageIcon}
               </Typography>
             )}
             {w.properties && w.properties.length > 0 && (
@@ -165,10 +175,6 @@ export const EquipmentItemCard = memo(({
         },
         opacity: disabled ? 0.5 : 1,
         pointerEvents: disabled ? 'none' : 'auto',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 0.5,
-        minHeight: 50,
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -181,13 +187,21 @@ export const EquipmentItemCard = memo(({
         <Typography variant="body2" sx={{ color: theme.palette.common.white, fontWeight: 500 }}>
           {item.name}
         </Typography>
+        {damageIcon && (
+          <img
+            src={damageIcon}
+            alt={damageType || 'тип урона'}
+            width={20}
+            height={20}
+            style={{ flexShrink: 0 }}
+          />
+        )}
         <Chip
           label={type === 'weapon' ? 'Оружие' : type === 'armor' ? 'Броня' : type === 'tool' ? 'Инструмент' : 'Предмет'}
           size="small"
           sx={{ color: 'white', borderColor: 'rgba(255,255,255,0.2)', ml: 'auto' }}
         />
       </Box>
-
       {renderDetails()}
     </Box>
   );
