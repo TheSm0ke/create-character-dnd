@@ -25,7 +25,6 @@ export const EquipmentItemCard = memo(({
     if (!disabled) onSelect();
   };
 
-  // Определяем тип урона для иконки
   let damageType: string | null = null;
   if (type === 'weapon') {
     damageType = (item as Weapon).damageType;
@@ -33,7 +32,9 @@ export const EquipmentItemCard = memo(({
     damageType = (item as Item).damage_type;
   }
 
-  const damageIcon = damageType ? damageIcons[damageType] : null;
+  // Приводим к регистру, как в damageIcons (первая буква заглавная)
+  const normalizedDamageType = damageType ? damageType.charAt(0).toUpperCase() + damageType.slice(1).toLowerCase() : null;
+  const damageIcon = normalizedDamageType ? damageIcons[normalizedDamageType] : null;
 
   const renderDetails = () => {
     switch (type) {
@@ -43,7 +44,7 @@ export const EquipmentItemCard = memo(({
           <Box sx={{ mt: 1 }}>
             {w.damage && (
               <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                Урон: {w.damage} {w.damageType || ''} {damageIcon}
+                Урон: {w.damage} {w.damageType || ''}
               </Typography>
             )}
             {w.properties && w.properties.length > 0 && (
@@ -184,15 +185,15 @@ export const EquipmentItemCard = memo(({
             <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" fill="white" />
           </svg>
         )}
-        <Typography variant="body2" sx={{ color: theme.palette.common.white, fontWeight: 500 }}>
+        <Typography variant="body2" sx={{ color: theme.palette.common.white, fontWeight: 500, flex: 1 }}>
           {item.name}
         </Typography>
         {damageIcon && (
           <img
             src={damageIcon}
             alt={damageType || 'тип урона'}
-            width={20}
-            height={20}
+            width={24}
+            height={24}
             style={{ flexShrink: 0 }}
           />
         )}
