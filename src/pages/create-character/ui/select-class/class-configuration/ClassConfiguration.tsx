@@ -373,7 +373,6 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
                     '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: theme.palette.primary.main },
                   }}
                 />
-                {/* Здесь карточки предметов теперь в сетке (горизонтально) */}
                 <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 1, mt: 1 }}>
                   {filterItems(idx).map((item, itemIdx) => {
                     const type = getItemType(item);
@@ -393,9 +392,31 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
             )}
 
             {selectedOptionIndex !== undefined && (
-              <Typography variant="caption" sx={{ color: theme.palette.text.secondary, mt: 1, display: 'block' }}>
-                Выбрано: {getSelectedItemName(idx) || selectedOptionName}
-              </Typography>
+              <>
+                <Typography variant="caption" sx={{ color: theme.palette.text.secondary, mt: 1, display: 'block' }}>
+                  Выбрано: {getSelectedItemName(idx) || selectedOptionName}
+                </Typography>
+                {selection?.specificItemId && (() => {
+                  const itemKey = `${idx}-${selection.optionIndex}`;
+                  const itemsList = loadedItems[itemKey] || [];
+                  const selectedItem = itemsList.find(item => item._id === selection.specificItemId);
+                  if (selectedItem) {
+                    const type = getItemType(selectedItem);
+                    return (
+                      <Box sx={{ mt: 1, maxWidth: '300px' }}>
+                        <EquipmentItemCard
+                          item={selectedItem}
+                          type={type}
+                          selected={true}
+                          onSelect={() => {}}
+                          disabled={true}
+                        />
+                      </Box>
+                    );
+                  }
+                  return null;
+                })()}
+              </>
             )}
           </Box>
         );
@@ -468,7 +489,7 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
         </Box>
       )}
 
-      {/* Заговоры */}
+      {/* ========== ЗАГОВОРЫ ========== */}
       {spellcasting && cantripsToChoose > 0 && (
         <Box sx={{ mb: 3 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
@@ -527,7 +548,7 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
         </Box>
       )}
 
-      {/* Заклинания 1-го уровня */}
+      {/* ========== ЗАКЛИНАНИЯ 1-го уровня ========== */}
       {spellcasting && spells1ToChoose > 0 && (
         <Box sx={{ mb: 3 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
