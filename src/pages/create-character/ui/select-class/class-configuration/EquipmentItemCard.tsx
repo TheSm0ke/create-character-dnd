@@ -20,6 +20,7 @@ export const EquipmentItemCard = memo(({
   onSelect,
   disabled = false,
 }: EquipmentItemCardProps) => {
+  console.log('type', type)
   const theme = useTheme();
 
   const handleClick = () => {
@@ -94,32 +95,29 @@ export const EquipmentItemCard = memo(({
       case 'armor': {
         const a = item as Armor;
         return (
-          <Box sx={{ mt: 0.5 }}>
+          <>
+            {a.class && (
+              <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
+                Тип: {item.class}
+              </Typography>
+            )}
             {a.classArmor && (
-              <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                КД: {a.classArmor}
+              <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
+                Класс брони: {item.classArmor}
               </Typography>
             )}
-            {a.needStrong > 0 && (
-              <Typography variant="caption" sx={{ color: theme.palette.text.secondary, display: 'block' }}>
-                Требует силы: {a.needStrong}
+            {a.needStrong !== undefined && a.needStrong > 0 && (
+              <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
+                Требуемая Сила: {item.needStrong}
               </Typography>
             )}
-            <Typography variant="caption" sx={{ color: theme.palette.text.secondary, display: 'block' }}>
-              Помеха скрытности: {a.Secrecy ? 'Да' : 'Нет'}
-            </Typography>
-            {a.cost && (
-              <Typography variant="caption" sx={{ color: theme.palette.text.secondary, display: 'block' }}>
-                Стоимость: {a.cost}
+            {a.Secrecy !== undefined && (
+              <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
+                Помеха скрытности: {a.Secrecy ? 'Да' : 'Нет'}
               </Typography>
             )}
-            {a.weight && (
-              <Typography variant="caption" sx={{ color: theme.palette.text.secondary, display: 'block' }}>
-                Вес: {a.weight}
-              </Typography>
-            )}
-          </Box>
-        );
+          </>
+        )
       }
       case 'tool': {
         const t = item as Tool;

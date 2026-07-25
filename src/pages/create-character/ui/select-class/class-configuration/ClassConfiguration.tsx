@@ -1,24 +1,19 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-
-import { Box, Typography, useTheme, Button, Chip, OutlinedInput, InputAdornment, Select, MenuItem, FormControl, Checkbox } from '@mui/material';
+// src/pages/create-character/ui/select-class/class-configuration/ClassConfiguration.tsx
+import { Box, Typography, useTheme, Button } from '@mui/material';
 import type { SelectChangeEvent } from '@mui/material';
 import { useState, useCallback } from 'react';
 import { fetchSpellsByClassAndLevel, type Class, type Spell, searchEquipment } from '../../../../../api';
 import { useFetch } from '../../../../../api/useFetch';
 import { SelectSkills } from '../selectedSkills';
-import { damageIcons, recommendedSpells, INSTRUMENTS } from './constants';
 import { useSpellCounts } from './hooks/useSpellCounts';
 import { useSpellFilter } from './hooks/useSpellFilter';
-import { EquipmentItemCard } from './EquipmentItemCard';
-import { getItemType } from './utils/equipmentUtils';
-import { SpellCard } from '../spellCard';
-
-const searchIcon = (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
-    <line x1="16.5" y1="16.5" x2="21" y2="21" stroke="currentColor" strokeWidth="2" />
-  </svg>
-);
+import { EquipmentChoices } from './ui/EquipmentChoices';
+import { SpellSelection } from './ui/SpellSelection';
+import { FixedEquipmentDisplay } from './ui/FixedEquipmentDisplay';
+import { SubclassSelection } from './ui/SubclassSelection';
+import { InstrumentSelection } from './ui/InstrumentSelection';
+import { recommendedSpells } from './constants';
 
 interface ClassConfigurationProps {
   classData: Class;
@@ -32,15 +27,6 @@ interface ClassConfigurationProps {
   }) => void;
   onBack: () => void;
 }
-
-const filterChipSx = {
-  color: 'white',
-  padding: '8px 16px',
-  height: 'auto',
-  fontSize: '0.9rem',
-  '& .MuiChip-label': { padding: '4px 12px' },
-  '& .MuiChip-icon': { width: 24, height: 24 },
-};
 
 export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfigurationProps) => {
   const theme = useTheme();
@@ -86,7 +72,7 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
   });
 
   const [loadedItems, setLoadedItems] = useState<{
-    [key: string]: { items: unknown[]; isPack: boolean }
+    [key: string]: { items: any[]; isPack: boolean; weaponItems?: any[]; shieldItem?: any | null; isShieldOption?: boolean }
   }>({});
 
   const [itemSearchQueries, setItemSearchQueries] = useState<{ [key: number]: string }>({});
@@ -95,17 +81,30 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
     setItemSearchQueries(prev => ({ ...prev, [idx]: query }));
   };
 
+  const filterWeaponItems = useCallback((choiceIndex: number) => {
+    const selection = selectedEquipment[choiceIndex];
+    if (!selection) return [];
+    const key = `${choiceIndex}-${selection.optionIndex}`;
+    const data = loadedItems[key];
+    if (!data || !data.weaponItems) return [];
+    const items = data.weaponItems;
+    const query = itemSearchQueries[choiceIndex] || '';
+    if (!query.trim()) return items;
+    const q = query.trim().toLowerCase();
+    return items.filter((item: any) => item && item.name && item.name.toLowerCase().includes(q));
+  }, [selectedEquipment, loadedItems, itemSearchQueries]);
+
   const filterItems = useCallback((choiceIndex: number) => {
     const selection = selectedEquipment[choiceIndex];
     if (!selection) return [];
     const key = `${choiceIndex}-${selection.optionIndex}`;
     const data = loadedItems[key];
     if (!data) return [];
-    const items = data.items as any[];
+    const items = data.items || [];
     const query = itemSearchQueries[choiceIndex] || '';
     if (!query.trim()) return items;
     const q = query.trim().toLowerCase();
-    return items.filter(item => item && (item as any).name && (item as any).name.toLowerCase().includes(q));
+    return items.filter((item: any) => item && item.name && item.name.toLowerCase().includes(q));
   }, [selectedEquipment, loadedItems, itemSearchQueries]);
 
   const hasInstrumentChoice = proficiencies.tools.some((tool) =>
@@ -158,37 +157,145 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
     const choice = choices[choiceIndex];
     const option = choice.options[optionIndex];
 
-    // Если в опции несколько предметов, используем их напрямую (без запроса)
-    if (option.length > 1) {
-      const items = option
-        .map(item => {
-          const name = item.name || '';
-          if (!name) return null;
-          return {
-            _id: `${key}-${name}`,
-            name: name,
-            cost: '—',
-            weight: '—',
-            detail: '',
-            type: 'item' as const,
-          };
-        })
-        .filter(item => item !== null);
+    const hasShield = option.some((item: any) => item.name && item.name.toLowerCase().includes('щит'));
 
-      setLoadedItems(prev => ({ ...prev, [key]: { items, isPack: false } }));
-      if (items.length === 1) {
-        setSelectedEquipment(prev => ({
+    if (hasShield && option.length > 1) {
+      const weaponName = option.find((item: any) => !item.name.toLowerCase().includes('щит'))?.name || '';
+      const shieldName = option.find((item: any) => item.name.toLowerCase().includes('щит'))?.name || 'щит';
+
+      try {
+        const weaponResult = await searchEquipment(weaponName);
+        let weaponItems: any[] = [];
+        if (Array.isArray(weaponResult)) {
+          weaponItems = weaponResult;
+        } else if (weaponResult && typeof weaponResult === 'object' && 'items' in weaponResult) {
+          weaponItems = (weaponResult as any).items || [];
+        } else if (weaponResult && typeof weaponResult === 'object' && 'type' in weaponResult && 'data' in weaponResult) {
+          const data = (weaponResult as any).data;
+          if (Array.isArray(data)) {
+            weaponItems = data;
+          } else if (data && typeof data === 'object') {
+            if ('items' in data) {
+              weaponItems = (data as any).items || [];
+            } else {
+              weaponItems = [data];
+            }
+          }
+        }
+
+        const shieldResult = await searchEquipment(shieldName);
+        let shieldItem: any = null;
+        if (Array.isArray(shieldResult) && shieldResult.length > 0) {
+          shieldItem = shieldResult[0];
+        } else if (shieldResult && typeof shieldResult === 'object' && 'items' in shieldResult) {
+          shieldItem = (shieldResult as any).items?.[0] || null;
+        } else if (shieldResult && typeof shieldResult === 'object' && 'type' in shieldResult && 'data' in shieldResult) {
+          const data = (shieldResult as any).data;
+          if (Array.isArray(data) && data.length > 0) {
+            shieldItem = data[0];
+          } else if (data && typeof data === 'object') {
+            if ('items' in data) {
+              shieldItem = (data as any).items?.[0] || null;
+            } else {
+              shieldItem = data;
+            }
+          }
+        }
+
+        setLoadedItems(prev => ({
           ...prev,
-          [choiceIndex]: {
-            ...prev[choiceIndex],
-            specificItemId: (items[0] as any)._id,
+          [key]: {
+            items: [],
+            isPack: false,
+            weaponItems: weaponItems,
+            shieldItem: shieldItem,
+            isShieldOption: true,
+          }
+        }));
+
+        if (weaponItems.length === 1) {
+          setSelectedEquipment(prev => ({
+            ...prev,
+            [choiceIndex]: {
+              ...prev[choiceIndex],
+              specificItemId: weaponItems[0]._id,
+            }
+          }));
+        }
+      } catch (e) {
+        console.error('Ошибка загрузки оружия и щита:', e);
+        setLoadedItems(prev => ({
+          ...prev,
+          [key]: {
+            items: [],
+            isPack: false,
+            weaponItems: [],
+            shieldItem: null,
+            isShieldOption: true,
           }
         }));
       }
       return;
     }
 
-    // Один предмет — делаем запрос к API
+    if (option.length > 1) {
+      const names = option.map((item: any) => item.name).filter(Boolean);
+      try {
+        const results = await Promise.all(names.map((name: string) => searchEquipment(name)));
+        let allItems: any[] = [];
+        let isPack = false;
+        for (const result of results) {
+          if (Array.isArray(result)) {
+            allItems = allItems.concat(result);
+          } else if (result && typeof result === 'object' && 'type' in result && 'data' in result) {
+            const data = (result as any).data;
+            if (Array.isArray(data)) {
+              allItems = allItems.concat(data);
+            } else if (data && typeof data === 'object') {
+              if ('items' in data) {
+                allItems = allItems.concat((data as any).items || []);
+                isPack = true;
+              } else {
+                allItems.push(data);
+              }
+            }
+          } else if (result && typeof result === 'object' && 'items' in result) {
+            const data = result as { items: any[]; isPack?: boolean };
+            allItems = allItems.concat(data.items || []);
+            isPack = isPack || (data.isPack || false);
+          }
+        }
+        setLoadedItems(prev => ({ ...prev, [key]: { items: allItems, isPack } }));
+        if (allItems.length === 1) {
+          setSelectedEquipment(prev => ({
+            ...prev,
+            [choiceIndex]: {
+              ...prev[choiceIndex],
+              specificItemId: allItems[0]._id,
+            }
+          }));
+        }
+      } catch (e) {
+        console.error('Ошибка загрузки составной опции:', e);
+        const items = option
+          .map((item: any) => {
+            const name = item.name || '';
+            if (!name) return null;
+            return {
+              _id: `${key}-${name}`,
+              name: name,
+              cost: '—',
+              weight: '—',
+              detail: '',
+              type: 'item' as const,
+            };
+          })
+          .filter((item: any) => item !== null);
+        setLoadedItems(prev => ({ ...prev, [key]: { items, isPack: false } }));
+      }
+      return;
+    }
+
     const optionName = option[0]?.name || '';
     if (!optionName || optionName.trim() === '') {
       setLoadedItems(prev => ({ ...prev, [key]: { items: [], isPack: false } }));
@@ -197,32 +304,25 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
 
     try {
       const result = await searchEquipment(optionName);
-      let itemsResult: unknown[] = [];
+      let itemsResult: any[] = [];
       let isPackResult = false;
 
-      // Если result — массив
       if (Array.isArray(result)) {
         itemsResult = result;
-      } 
-      // Если result — объект с type и data (новый формат)
-      else if (result && typeof result === 'object' && 'type' in result && 'data' in result) {
+      } else if (result && typeof result === 'object' && 'type' in result && 'data' in result) {
         const data = (result as any).data;
         if (Array.isArray(data)) {
           itemsResult = data;
         } else if (data && typeof data === 'object') {
-          // Если data — набор (имеет items)
           if ('items' in data) {
             itemsResult = (data as any).items || [];
             isPackResult = true;
           } else {
-            // Одиночный предмет
             itemsResult = [data];
           }
         }
-      }
-      // Если result — объект с items (старый формат)
-      else if (result && typeof result === 'object' && 'items' in result) {
-        const data = result as { items: unknown[]; isPack?: boolean };
+      } else if (result && typeof result === 'object' && 'items' in result) {
+        const data = result as { items: any[]; isPack?: boolean };
         itemsResult = data.items || [];
         isPackResult = data.isPack || false;
       }
@@ -233,7 +333,7 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
           ...prev,
           [choiceIndex]: {
             ...prev[choiceIndex],
-            specificItemId: (itemsResult[0] as any)?._id,
+            specificItemId: itemsResult[0]?._id,
           }
         }));
       }
@@ -287,7 +387,12 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
       const key = `${i}-${selection.optionIndex}`;
       const data = loadedItems[key];
       if (!data) return false;
-      const items = data.items as any[];
+      if (data.isShieldOption) {
+        const weaponItems = data.weaponItems || [];
+        if (weaponItems.length > 1 && !selection.specificItemId) return false;
+        continue;
+      }
+      const items = data.items || [];
       const isPack = data.isPack;
       if (isPack) continue;
       if (items.length > 1 && !selection.specificItemId) return false;
@@ -307,16 +412,27 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
       const key = `${idx}-${selection.optionIndex}`;
       const data = loadedItems[key];
       if (!data) return [];
-      const items = data.items as any[];
+
+      if (data.isShieldOption) {
+        const weaponItems = data.weaponItems || [];
+        const shieldItem = data.shieldItem;
+        const chosenWeapon = weaponItems.find((item: any) => item._id === selection.specificItemId);
+        const result = [];
+        if (chosenWeapon) result.push(chosenWeapon.name);
+        if (shieldItem) result.push(shieldItem.name);
+        return result;
+      }
+
+      const items = data.items || [];
       const isPack = data.isPack;
-      if (isPack) {
-        return items.map(item => item.name);
+      if (isPack || items.length > 1) {
+        return items.map((item: any) => item.name);
       } else {
-        const found = items.find(item => item._id === selection.specificItemId);
+        const found = items.find((item: any) => item._id === selection.specificItemId);
         if (found) return [found.name];
         if (items.length > 0) return [items[0].name];
         const option = choice.options[selection.optionIndex];
-        return option.map(item => item.name);
+        return option.map((item: any) => item.name);
       }
     });
     onConfirm({
@@ -344,410 +460,62 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
         />
       )}
 
-      {fixed_equipment.length > 0 && (
-        <Box sx={{ mb: 3 }}>
-          <Typography variant="subtitle1" sx={{ color: theme.palette.primary.main }}>
-            Вы получаете:
-          </Typography>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 0.5 }}>
-            {fixed_equipment.map((item, idx) => (
-              <Typography key={idx} variant="body2" sx={{ color: theme.palette.common.white, mr: 1 }}>
-                • {item.name} {item.count > 1 && `(×${item.count})`}
-              </Typography>
-            ))}
-          </Box>
-        </Box>
-      )}
+      <FixedEquipmentDisplay fixedEquipment={fixed_equipment} />
 
-      {choices.map((choice, idx) => {
-        const selection = selectedEquipment[idx];
-        const selectedOptionIndex = selection?.optionIndex;
-        const selectedOption = selectedOptionIndex !== undefined ? choice.options[selectedOptionIndex] : null;
-        const selectedOptionName = selectedOption?.[0]?.name || '';
+      <EquipmentChoices
+        choices={choices}
+        selectedEquipment={selectedEquipment}
+        loadedItems={loadedItems}
+        itemSearchQueries={itemSearchQueries}
+        setItemSearchQuery={setItemSearchQuery}
+        filterWeaponItems={filterWeaponItems}
+        filterItems={filterItems}
+        handleEquipmentOptionSelect={handleEquipmentOptionSelect}
+        handleSpecificItemSelect={handleSpecificItemSelect}
+      />
 
-        const key = `${idx}-${selectedOptionIndex}`;
-        const loadedData = loadedItems[key];
-        const items = (loadedData?.items as any[]) || [];
-        const isPack = loadedData?.isPack || false;
-        const isLoading = selectedOptionIndex !== undefined && !loadedData;
+      <SubclassSelection subclasses={subclasses} selectedSubclass={selectedSubclass} onChange={handleSubclassChange} />
 
-        return (
-          <Box key={idx} sx={{ mb: 3 }}>
-            <Typography variant="subtitle1" sx={{ color: theme.palette.primary.main }}>
-              {choice.description}
-            </Typography>
+      <InstrumentSelection instrumentCount={instrumentCount} selectedInstruments={selectedInstruments} onChange={handleInstrumentChange} />
 
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, mt: 1 }}>
-              {choice.options.map((option, optIdx) => {
-                const isSelected = selectedOptionIndex === optIdx;
-                const label = option.map(item => `${item.name} ${item.count > 1 ? `(×${item.count})` : ''}`).join(', ');
-                return (
-                  <Box
-                    key={optIdx}
-                    onClick={() => handleEquipmentOptionSelect(idx, optIdx)}
-                    sx={{
-                      padding: '12px 16px',
-                      borderRadius: 2,
-                      border: '2px solid',
-                      borderColor: isSelected
-                        ? theme.palette.primary.main
-                        : 'rgba(255,255,255,0.08)',
-                      backgroundColor: isSelected
-                        ? 'rgba(170, 59, 255, 0.12)'
-                        : 'transparent',
-                      cursor: 'pointer',
-                      transition: 'all 0.25s ease',
-                      '&:hover': {
-                        borderColor: isSelected
-                          ? theme.palette.primary.main
-                          : theme.palette.primary.light,
-                        backgroundColor: isSelected
-                          ? 'rgba(170, 59, 255, 0.12)'
-                          : 'rgba(255,255,255,0.03)',
-                      },
-                      width: { xs: '100%', sm: 'calc(50% - 8px)', md: 'calc(33.33% - 10px)' },
-                    }}
-                  >
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      {isSelected && (
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
-                          <circle cx="12" cy="12" r="10" fill={theme.palette.primary.main} />
-                          <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" fill="white" />
-                        </svg>
-                      )}
-                      <Typography variant="body2" sx={{ color: theme.palette.common.white }}>
-                        {label}
-                      </Typography>
-                    </Box>
-                  </Box>
-                );
-              })}
-            </Box>
-
-            {selectedOptionIndex !== undefined && (
-              <>
-                <Typography variant="caption" sx={{ color: theme.palette.text.secondary, mt: 1, display: 'block' }}>
-                  Выбрано: {selectedOptionName}
-                </Typography>
-
-                {isLoading ? (
-                  <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                    Загрузка...
-                  </Typography>
-                ) : (
-                  (() => {
-                    const validItems = items.filter(item => item != null);
-                    if (validItems.length === 0) {
-                      return (
-                        <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                          Предметы не найдены
-                        </Typography>
-                      );
-                    }
-
-                    // Если это набор (isPack) или составная опция (несколько предметов) — показываем все как выбранные
-                    if (isPack) {
-                      return (
-                        <Box sx={{ mt: 1 }}>
-                          <Typography variant="caption" sx={{ color: theme.palette.text.secondary, display: 'block', mb: 0.5 }}>
-                            Состав:
-                          </Typography>
-                          <Box sx={{ display: 'grid', gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: 1 }}>
-                            {validItems.map((item, i) => (
-                              <Box key={i} sx={{ p: 1, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 1, }}>
-                                <Typography variant="body2" sx={{ color: theme.palette.common.white, fontWeight: 500 }}>
-                                  {item.name}
-                                  {item.count && item.count > 1 && ` (×${item.count})`}
-                                </Typography>
-                                {(item.cost || item.weight || item.count) && (
-                                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 0.5 }}>
-                                    {item.cost && (
-                                      <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                                        Стоимость: {item.cost}
-                                      </Typography>
-                                    )}
-                                    {item.weight && (
-                                      <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                                        Вес: {item.weight}
-                                      </Typography>
-                                    )}
-                                    {item.count && (
-                                      <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                                        Количество: {item.count}
-                                      </Typography>
-                                    )}
-                                  </Box>
-                                )}
-                                {item.detail && (
-                                  <Typography
-                                    variant="caption"
-                                    sx={{
-                                      display: 'block',
-                                      color: theme.palette.text.secondary,
-                                      mt: 0.5,
-                                      whiteSpace: 'pre-wrap',
-                                      fontSize: '0.75rem',
-                                    }}
-                                  >
-                                    {item.detail}
-                                  </Typography>
-                                )}
-                              </Box>
-                            ))}
-                          </Box>
-                        </Box>
-                      );
-                    }
-
-                    if (validItems.length > 1) {
-                      return (
-                        <Box sx={{ mt: 2, p: 2, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 2 }}>
-                          <Typography variant="caption" sx={{ color: theme.palette.primary.main }}>
-                            Выберите конкретный предмет:
-                          </Typography>
-                          <OutlinedInput
-                            placeholder="Поиск по названию..."
-                            value={itemSearchQueries[idx] || ''}
-                            onChange={(e) => setItemSearchQuery(idx, e.target.value)}
-                            size="small"
-                            startAdornment={
-                              <InputAdornment position="start" sx={{ color: theme.palette.text.secondary }}>
-                                {searchIcon}
-                              </InputAdornment>
-                            }
-                            sx={{
-                              mt: 1,
-                              width: '100%',
-                              color: theme.palette.common.white,
-                              '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' },
-                              '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: theme.palette.primary.main },
-                              '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: theme.palette.primary.main },
-                            }}
-                          />
-                          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 1, mt: 1 }}>
-                            {filterItems(idx).filter(item => item != null).map((item, itemIdx) => {
-                              const type = getItemType(item);
-                              const isSelected = selection?.specificItemId === item._id;
-                              return (
-                                <EquipmentItemCard
-                                  key={itemIdx}
-                                  item={item}
-                                  type={type}
-                                  selected={isSelected}
-                                  onSelect={() => handleSpecificItemSelect(idx, item._id)}
-                                />
-                              );
-                            })}
-                          </Box>
-                        </Box>
-                      );
-                    }
-
-                    // Один предмет — показываем карточку
-                    const selectedItem = validItems[0];
-                    const type = getItemType(selectedItem);
-                    return (
-                      <Box sx={{ mt: 1, maxWidth: '300px' }}>
-                        <EquipmentItemCard
-                          item={selectedItem}
-                          type={type}
-                          selected={true}
-                          onSelect={() => {}}
-                          disabled={true}
-                        />
-                      </Box>
-                    );
-                  })()
-                )}
-              </>
-            )}
-          </Box>
-        );
-      })}
-
-      {subclasses.length > 0 && (
-        <Box sx={{ mb: 3 }}>
-          <Typography variant="subtitle1" sx={{ color: theme.palette.primary.main }}>
-            Выберите подкласс
-          </Typography>
-          <FormControl fullWidth sx={{ mt: 1 }}>
-            <Select
-              value={selectedSubclass}
-              onChange={handleSubclassChange}
-              sx={{
-                color: theme.palette.common.white,
-                '& .MuiSelect-icon': { color: theme.palette.common.white },
-                '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' },
-                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: theme.palette.primary.main },
-              }}
-            >
-              {subclasses.map((sub) => (
-                <MenuItem key={sub.id} value={sub.id}>
-                  <Box>
-                    <Typography variant="body1">{sub.name}</Typography>
-                    <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                      {sub.description}
-                    </Typography>
-                  </Box>
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Box>
-      )}
-
-      {hasInstrumentChoice && instrumentCount > 0 && (
-        <Box sx={{ mb: 3 }}>
-          <Typography variant="subtitle1" sx={{ color: theme.palette.primary.main }}>
-            Выберите {instrumentCount} музыкальных инструмента
-          </Typography>
-          <FormControl fullWidth sx={{ mt: 1 }}>
-            <Select
-              multiple
-              value={selectedInstruments}
-              onChange={handleInstrumentChange}
-              input={<OutlinedInput sx={{ color: theme.palette.common.white }} />}
-              renderValue={(selected) => (
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                  {(selected as string[]).map((value) => (
-                    <Chip key={value} label={value} sx={{ color: 'white' }} />
-                  ))}
-                </Box>
-              )}
-              sx={{
-                color: theme.palette.common.white,
-                '& .MuiSelect-icon': { color: theme.palette.common.white },
-                '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' },
-                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: theme.palette.primary.main },
-              }}
-            >
-              {INSTRUMENTS.map((inst) => (
-                <MenuItem key={inst} value={inst}>
-                  <Checkbox checked={selectedInstruments.indexOf(inst) > -1} />
-                  <Typography sx={{ color: theme.palette.common.white }}>{inst}</Typography>
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Box>
-      )}
-
-      {/* ========== ЗАГОВОРЫ ========== */}
       {spellcasting && cantripsToChoose > 0 && (
-        <Box sx={{ mb: 3 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-            <Typography variant="subtitle1" sx={{ color: theme.palette.primary.main }}>
-              Выберите заговоры ({selectedCantrips.length}/{cantripsToChoose})
-              <span style={{ color: theme.palette.text.secondary, marginLeft: 8, fontSize: '0.9rem' }}>
-                {selectedCantrips.length > 0 ? `– ${selectedCantrips.map(s => s.name).join(', ')}` : ''}
-              </span>
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              {!loading && spellsData?.cantrips && spellsData.cantrips.length > 0 && (
-                <>
-                  <Button size="small" variant="outlined" onClick={applyRecommendedCantrips} disabled={selectedCantrips.length === cantripsToChoose} sx={{ color: 'white', borderColor: 'rgba(255,255,255,0.3)' }}>Рекомендованные</Button>
-                  <Button size="small" variant="outlined" onClick={clearCantrips} disabled={selectedCantrips.length === 0} sx={{ color: 'white', borderColor: 'rgba(255,255,255,0.3)' }}>Очистить</Button>
-                </>
-              )}
-            </Box>
-          </Box>
-
-          <OutlinedInput
-            placeholder="Поиск заговоров..."
-            value={cantripFilter.searchQuery}
-            onChange={(e) => cantripFilter.setSearchQuery(e.target.value)}
-            size="small"
-            startAdornment={<InputAdornment position="start" sx={{ color: theme.palette.text.secondary }}>{searchIcon}</InputAdornment>}
-            sx={{ mb: 1, width: '100%', maxWidth: 400, color: theme.palette.common.white, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' }, '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: theme.palette.primary.main }, '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: theme.palette.primary.main } }}
-          />
-
-          {!loading && cantripFilter.damageTypes.length > 0 && (
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 1 }}>
-              <Chip label="Все" size="medium" onClick={() => cantripFilter.setDamageFilter(null)} color={cantripFilter.damageFilter === null ? 'primary' : 'default'} variant={cantripFilter.damageFilter === null ? 'filled' : 'outlined'} sx={filterChipSx} />
-              {cantripFilter.damageTypes.map((type) => {
-                const icon = damageIcons[type];
-                return (
-                  <Chip key={type} label={type} size="medium" onClick={() => cantripFilter.setDamageFilter(cantripFilter.damageFilter === type ? null : type)} color={cantripFilter.damageFilter === type ? 'primary' : 'default'} variant={cantripFilter.damageFilter === type ? 'filled' : 'outlined'} icon={icon ? <img src={icon} alt={type} width={24} height={24} style={{ display: 'block' }} /> : undefined} sx={filterChipSx} />
-                );
-              })}
-            </Box>
-          )}
-
-          {loading ? (
-            <Typography sx={{ color: theme.palette.text.secondary }}>Загрузка...</Typography>
-          ) : (
-            <Box sx={{ maxHeight: 600, overflowY: 'auto', paddingRight: 1, '&::-webkit-scrollbar': { width: 6 }, '&::-webkit-scrollbar-track': { background: 'rgba(255,255,255,0.05)', borderRadius: 4 }, '&::-webkit-scrollbar-thumb': { background: theme.palette.primary.main, borderRadius: 4 } }}>
-              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(570px, 1fr))', gap: 1.5 }}>
-                {cantripFilter.filteredSpells.length > 0 ? (
-                  cantripFilter.filteredSpells.map((spell) => (
-                    <SpellCard key={spell._id} spell={spell} selected={selectedCantrips.some(s => s._id === spell._id)} onToggle={() => handleCantripToggle(spell)} disabled={!selectedCantrips.some(s => s._id === spell._id) && selectedCantrips.length >= cantripsToChoose} recommended={recommendedSpells[name]?.cantrips?.includes(spell.name) ?? false} />
-                  ))
-                ) : (
-                  <Typography sx={{ color: theme.palette.text.secondary }}>Нет заговоров с выбранным типом урона или по запросу</Typography>
-                )}
-              </Box>
-            </Box>
-          )}
-        </Box>
+        <SpellSelection
+          title="Выберите заговоры"
+          spells={cantripFilter.filteredSpells}
+          selectedSpells={selectedCantrips}
+          onToggle={handleCantripToggle}
+          toChoose={cantripsToChoose}
+          searchQuery={cantripFilter.searchQuery}
+          setSearchQuery={cantripFilter.setSearchQuery}
+          damageFilter={cantripFilter.damageFilter}
+          setDamageFilter={cantripFilter.setDamageFilter}
+          damageTypes={cantripFilter.damageTypes}
+          applyRecommended={applyRecommendedCantrips}
+          clear={clearCantrips}
+          loading={loading}
+          className={name}
+          isCantrip={true}
+        />
       )}
 
-      {/* ========== ЗАКЛИНАНИЯ 1-го уровня ========== */}
       {spellcasting && spells1ToChoose > 0 && (
-        <Box sx={{ mb: 3 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-            <Typography variant="subtitle1" sx={{ color: theme.palette.primary.main }}>
-              Выберите заклинания 1-го уровня ({selectedSpells1.length}/{spells1ToChoose})
-              <span style={{ color: theme.palette.text.secondary, marginLeft: 8, fontSize: '0.9rem' }}>
-                {selectedSpells1.length > 0 ? `– ${selectedSpells1.map(s => s.name).join(', ')}` : ''}
-              </span>
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              {!loading && spellsData?.spells1 && spellsData.spells1.length > 0 && (
-                <>
-                  <Button size="small" variant="outlined" onClick={applyRecommendedSpells1} disabled={selectedSpells1.length === spells1ToChoose} sx={{ color: 'white', borderColor: 'rgba(255,255,255,0.3)' }}>Рекомендованные</Button>
-                  <Button size="small" variant="outlined" onClick={clearSpells1} disabled={selectedSpells1.length === 0} sx={{ color: 'white', borderColor: 'rgba(255,255,255,0.3)' }}>Очистить</Button>
-                </>
-              )}
-            </Box>
-          </Box>
-
-          <OutlinedInput
-            placeholder="Поиск заклинаний 1-го уровня..."
-            value={spell1Filter.searchQuery}
-            onChange={(e) => spell1Filter.setSearchQuery(e.target.value)}
-            size="small"
-            startAdornment={<InputAdornment position="start" sx={{ color: theme.palette.text.secondary }}>{searchIcon}</InputAdornment>}
-            sx={{ mb: 1, width: '100%', maxWidth: 400, color: theme.palette.common.white, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' }, '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: theme.palette.primary.main }, '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: theme.palette.primary.main } }}
-          />
-
-          {!loading && spell1Filter.damageTypes.length > 0 && (
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 1 }}>
-              <Chip label="Все" size="medium" onClick={() => spell1Filter.setDamageFilter(null)} color={spell1Filter.damageFilter === null ? 'primary' : 'default'} variant={spell1Filter.damageFilter === null ? 'filled' : 'outlined'} sx={filterChipSx} />
-              {spell1Filter.damageTypes.map((type) => {
-                const icon = damageIcons[type];
-                return (
-                  <Chip key={type} label={type} size="medium" onClick={() => spell1Filter.setDamageFilter(spell1Filter.damageFilter === type ? null : type)} color={spell1Filter.damageFilter === type ? 'primary' : 'default'} variant={spell1Filter.damageFilter === type ? 'filled' : 'outlined'} icon={icon ? <img src={icon} alt={type} width={24} height={24} style={{ display: 'block' }} /> : undefined} sx={filterChipSx} />
-                );
-              })}
-            </Box>
-          )}
-
-          {loading ? (
-            <Typography sx={{ color: theme.palette.text.secondary }}>Загрузка...</Typography>
-          ) : (
-            <Box sx={{ maxHeight: 600, overflowY: 'auto', paddingRight: 1, '&::-webkit-scrollbar': { width: 6 }, '&::-webkit-scrollbar-track': { background: 'rgba(255,255,255,0.05)', borderRadius: 4 }, '&::-webkit-scrollbar-thumb': { background: theme.palette.primary.main, borderRadius: 4 } }}>
-              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(570px, 1fr))', gap: 1.5 }}>
-                {spell1Filter.filteredSpells.length > 0 ? (
-                  spell1Filter.filteredSpells.map((spell) => (
-                    <SpellCard key={spell._id} spell={spell} selected={selectedSpells1.some(s => s._id === spell._id)} onToggle={() => handleSpell1Toggle(spell)} disabled={!selectedSpells1.some(s => s._id === spell._id) && selectedSpells1.length >= spells1ToChoose} recommended={recommendedSpells[name]?.spells1?.includes(spell.name) ?? false} />
-                  ))
-                ) : (
-                  <Typography sx={{ color: theme.palette.text.secondary }}>Нет заклинаний 1-го уровня с выбранным типом урона или по запросу</Typography>
-                )}
-              </Box>
-            </Box>
-          )}
-        </Box>
+        <SpellSelection
+          title="Выберите заклинания 1-го уровня"
+          spells={spell1Filter.filteredSpells}
+          selectedSpells={selectedSpells1}
+          onToggle={handleSpell1Toggle}
+          toChoose={spells1ToChoose}
+          searchQuery={spell1Filter.searchQuery}
+          setSearchQuery={spell1Filter.setSearchQuery}
+          damageFilter={spell1Filter.damageFilter}
+          setDamageFilter={spell1Filter.setDamageFilter}
+          damageTypes={spell1Filter.damageTypes}
+          applyRecommended={applyRecommendedSpells1}
+          clear={clearSpells1}
+          loading={loading}
+          className={name}
+          isCantrip={false}
+        />
       )}
 
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
