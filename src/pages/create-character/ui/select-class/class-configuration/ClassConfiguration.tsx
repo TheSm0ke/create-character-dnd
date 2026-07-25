@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { Box, Typography, useTheme, Button, Chip, OutlinedInput, InputAdornment, Select, MenuItem, FormControl, Checkbox } from '@mui/material';
 import type { SelectChangeEvent } from '@mui/material';
 import { useState, useCallback } from 'react';
@@ -10,7 +12,6 @@ import { useSpellFilter } from './hooks/useSpellFilter';
 import { EquipmentItemCard } from './EquipmentItemCard';
 import { getItemType } from './utils/equipmentUtils';
 import { SpellCard } from '../spellCard';
-import type { Weapon, Armor, Item, Tool } from '../../../../../api';
 
 const searchIcon = (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -85,7 +86,7 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
   });
 
   const [loadedItems, setLoadedItems] = useState<{
-    [key: string]: (Weapon | Armor | Item | Tool)[]
+    [key: string]: { items: unknown[]; isPack: boolean }
   }>({});
 
   const [itemSearchQueries, setItemSearchQueries] = useState<{ [key: number]: string }>({});
@@ -98,11 +99,13 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
     const selection = selectedEquipment[choiceIndex];
     if (!selection) return [];
     const key = `${choiceIndex}-${selection.optionIndex}`;
-    const items = loadedItems[key] || [];
+    const data = loadedItems[key];
+    if (!data) return [];
+    const items = data.items as any[];
     const query = itemSearchQueries[choiceIndex] || '';
     if (!query.trim()) return items;
     const q = query.trim().toLowerCase();
-    return items.filter(item => item.name.toLowerCase().includes(q));
+    return items.filter(item => item && (item as any).name && (item as any).name.toLowerCase().includes(q));
   }, [selectedEquipment, loadedItems, itemSearchQueries]);
 
   const hasInstrumentChoice = proficiencies.tools.some((tool) =>
@@ -153,22 +156,69 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
     const key = `${choiceIndex}-${optionIndex}`;
     if (loadedItems[key]) return;
     const choice = choices[choiceIndex];
-    const optionName = choice.options[optionIndex][0]?.name;
-    if (!optionName) return;
-    try {
-      const results = await searchEquipment(optionName);
-      setLoadedItems(prev => ({ ...prev, [key]: results }));
-      if (results.length === 1) {
+    const option = choice.options[optionIndex];
+
+    if (option.length > 1) {
+      const items = option
+        .map(item => {
+          const name = item.name || '';
+          if (!name) return null;
+          return {
+            _id: `${key}-${name}`,
+            name: name,
+            cost: '—',
+            weight: '—',
+            detail: '',
+            type: 'item' as const,
+          };
+        })
+        .filter(item => item !== null);
+
+      setLoadedItems(prev => ({ ...prev, [key]: { items, isPack: false } }));
+      if (items.length === 1) {
         setSelectedEquipment(prev => ({
           ...prev,
           [choiceIndex]: {
             ...prev[choiceIndex],
-            specificItemId: results[0]._id,
+            specificItemId: (items[0] as any)._id,
+          }
+        }));
+      }
+      return;
+    }
+
+    const optionName = option[0]?.name || '';
+    if (!optionName || optionName.trim() === '') {
+      setLoadedItems(prev => ({ ...prev, [key]: { items: [], isPack: false } }));
+      return;
+    }
+
+    try {
+      const result = await searchEquipment(optionName);
+      let itemsResult: unknown[] = [];
+      let isPackResult = false;
+
+      if (Array.isArray(result)) {
+        itemsResult = result;
+      } else if (result && typeof result === 'object' && 'items' in result) {
+        const data = result as { items: unknown[]; isPack?: boolean };
+        itemsResult = data.items || [];
+        isPackResult = data.isPack || false;
+      }
+
+      setLoadedItems(prev => ({ ...prev, [key]: { items: itemsResult, isPack: isPackResult } }));
+      if (itemsResult.length === 1) {
+        setSelectedEquipment(prev => ({
+          ...prev,
+          [choiceIndex]: {
+            ...prev[choiceIndex],
+            specificItemId: (itemsResult[0] as any)?._id,
           }
         }));
       }
     } catch (e) {
       console.error('Ошибка загрузки предметов:', e);
+      setLoadedItems(prev => ({ ...prev, [key]: { items: [], isPack: false } }));
     }
   }, [choices, loadedItems]);
 
@@ -189,15 +239,6 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
       }
     }));
   }, []);
-
-  const getSelectedItemName = useCallback((choiceIndex: number) => {
-    const selection = selectedEquipment[choiceIndex];
-    if (!selection) return null;
-    const key = `${choiceIndex}-${selection.optionIndex}`;
-    const items = loadedItems[key] || [];
-    const found = items.find(item => item._id === selection.specificItemId);
-    return found?.name || null;
-  }, [selectedEquipment, loadedItems]);
 
   const applyRecommendedCantrips = useCallback(() => {
     const names = recommendedSpells[name]?.cantrips || [];
@@ -223,8 +264,12 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
       const selection = selectedEquipment[i];
       if (!selection) return false;
       const key = `${i}-${selection.optionIndex}`;
-      const items = loadedItems[key];
-      if (items && items.length > 1 && !selection.specificItemId) return false;
+      const data = loadedItems[key];
+      if (!data) return false;
+      const items = data.items as any[];
+      const isPack = data.isPack;
+      if (isPack) continue;
+      if (items.length > 1 && !selection.specificItemId) return false;
     }
 
     if (subclasses.length > 0 && !selectedSubclass) return false;
@@ -239,11 +284,19 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
       const selection = selectedEquipment[idx];
       if (!selection) return [];
       const key = `${idx}-${selection.optionIndex}`;
-      const items = loadedItems[key] || [];
-      const found = items.find(item => item._id === selection.specificItemId);
-      if (found) return [found.name];
-      const option = choice.options[selection.optionIndex];
-      return option.map(item => item.name);
+      const data = loadedItems[key];
+      if (!data) return [];
+      const items = data.items as any[];
+      const isPack = data.isPack;
+      if (isPack) {
+        return items.map(item => item.name);
+      } else {
+        const found = items.find(item => item._id === selection.specificItemId);
+        if (found) return [found.name];
+        if (items.length > 0) return [items[0].name];
+        const option = choice.options[selection.optionIndex];
+        return option.map(item => item.name);
+      }
     });
     onConfirm({
       skills: selectedSkills,
@@ -292,9 +345,10 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
         const selectedOptionName = selectedOption?.[0]?.name || '';
 
         const key = `${idx}-${selectedOptionIndex}`;
-        const items = loadedItems[key];
-        const hasItems = items && items.length > 0;
-        const showSelection = hasItems && items.length > 1;
+        const loadedData = loadedItems[key];
+        const items = (loadedData?.items as any[]) || [];
+        const isPack = loadedData?.isPack || false;
+        const isLoading = selectedOptionIndex !== undefined && !loadedData;
 
         return (
           <Box key={idx} sx={{ mb: 3 }}>
@@ -349,58 +403,97 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
               })}
             </Box>
 
-            {showSelection && (
-              <Box sx={{ mt: 2, p: 2, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 2 }}>
-                <Typography variant="caption" sx={{ color: theme.palette.primary.main }}>
-                  Выберите конкретный предмет:
-                </Typography>
-                <OutlinedInput
-                  placeholder="Поиск по названию..."
-                  value={itemSearchQueries[idx] || ''}
-                  onChange={(e) => setItemSearchQuery(idx, e.target.value)}
-                  size="small"
-                  startAdornment={
-                    <InputAdornment position="start" sx={{ color: theme.palette.text.secondary }}>
-                      {searchIcon}
-                    </InputAdornment>
-                  }
-                  sx={{
-                    mt: 1,
-                    width: '100%',
-                    color: theme.palette.common.white,
-                    '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' },
-                    '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: theme.palette.primary.main },
-                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: theme.palette.primary.main },
-                  }}
-                />
-                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 1, mt: 1 }}>
-                  {filterItems(idx).map((item, itemIdx) => {
-                    const type = getItemType(item);
-                    const isSelected = selection?.specificItemId === item._id;
-                    return (
-                      <EquipmentItemCard
-                        key={itemIdx}
-                        item={item}
-                        type={type}
-                        selected={isSelected}
-                        onSelect={() => handleSpecificItemSelect(idx, item._id)}
-                      />
-                    );
-                  })}
-                </Box>
-              </Box>
-            )}
-
             {selectedOptionIndex !== undefined && (
               <>
                 <Typography variant="caption" sx={{ color: theme.palette.text.secondary, mt: 1, display: 'block' }}>
-                  Выбрано: {getSelectedItemName(idx) || selectedOptionName}
+                  Выбрано: {selectedOptionName}
                 </Typography>
-                {selection?.specificItemId && (() => {
-                  const itemKey = `${idx}-${selection.optionIndex}`;
-                  const itemsList = loadedItems[itemKey] || [];
-                  const selectedItem = itemsList.find(item => item._id === selection.specificItemId);
-                  if (selectedItem) {
+
+                {isLoading ? (
+                  <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
+                    Загрузка...
+                  </Typography>
+                ) : (
+                  (() => {
+                    const validItems = items.filter(item => item != null);
+                    if (validItems.length === 0) {
+                      return (
+                        <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
+                          Предметы не найдены
+                        </Typography>
+                      );
+                    }
+
+                    if (isPack) {
+                      return (
+                        <Box sx={{ mt: 1 }}>
+                          <Typography variant="caption" sx={{ color: theme.palette.text.secondary, display: 'block', mb: 0.5 }}>
+                            Состав:
+                          </Typography>
+                          <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+                            {validItems.map((item, i) => {
+                              const type = getItemType(item);
+                              return (
+                                <EquipmentItemCard
+                                  key={i}
+                                  item={item}
+                                  type={type}
+                                  selected={true}
+                                  onSelect={() => {}}
+                                  disabled={true}
+                                />
+                              );
+                            })}
+                          </Box>
+                        </Box>
+                      );
+                    }
+
+                    if (validItems.length > 1) {
+                      return (
+                        <Box sx={{ mt: 2, p: 2, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 2 }}>
+                          <Typography variant="caption" sx={{ color: theme.palette.primary.main }}>
+                            Выберите конкретный предмет:
+                          </Typography>
+                          <OutlinedInput
+                            placeholder="Поиск по названию..."
+                            value={itemSearchQueries[idx] || ''}
+                            onChange={(e) => setItemSearchQuery(idx, e.target.value)}
+                            size="small"
+                            startAdornment={
+                              <InputAdornment position="start" sx={{ color: theme.palette.text.secondary }}>
+                                {searchIcon}
+                              </InputAdornment>
+                            }
+                            sx={{
+                              mt: 1,
+                              width: '100%',
+                              color: theme.palette.common.white,
+                              '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' },
+                              '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: theme.palette.primary.main },
+                              '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: theme.palette.primary.main },
+                            }}
+                          />
+                          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 1, mt: 1 }}>
+                            {filterItems(idx).filter(item => item != null).map((item, itemIdx) => {
+                              const type = getItemType(item);
+                              const isSelected = selection?.specificItemId === item._id;
+                              return (
+                                <EquipmentItemCard
+                                  key={itemIdx}
+                                  item={item}
+                                  type={type}
+                                  selected={isSelected}
+                                  onSelect={() => handleSpecificItemSelect(idx, item._id)}
+                                />
+                              );
+                            })}
+                          </Box>
+                        </Box>
+                      );
+                    }
+
+                    const selectedItem = validItems[0];
                     const type = getItemType(selectedItem);
                     return (
                       <Box sx={{ mt: 1, maxWidth: '300px' }}>
@@ -413,9 +506,8 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
                         />
                       </Box>
                     );
-                  }
-                  return null;
-                })()}
+                  })()
+                )}
               </>
             )}
           </Box>

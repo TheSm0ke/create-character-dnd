@@ -1,9 +1,11 @@
-import type { EquipmentType } from '../../../../../../api/equipment';
+import type { Weapon, Armor, Item, Tool, PackItem } from '../../../../../../api';
 
-export const getItemType = (item: unknown): EquipmentType => {
-  const obj = item as Record<string, unknown>;
-  if ('damage' in obj && 'damageType' in obj && 'properties' in obj) return 'weapon';
-  if ('classArmor' in obj && 'needStrong' in obj) return 'armor';
-  if ('category' in obj && 'skills' in obj) return 'tool';
+export const getItemType = (
+  item: Weapon | Armor | Item | Tool | PackItem | null | undefined
+): 'weapon' | 'armor' | 'item' | 'tool' => {
+  if (!item) return 'item';
+  if ('damage' in item) return 'weapon';
+  if ('ac' in item) return 'armor';
+  if ('properties' in item && 'skills' in item) return 'tool';
   return 'item';
 };

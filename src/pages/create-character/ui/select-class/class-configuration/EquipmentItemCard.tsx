@@ -174,7 +174,6 @@ export const EquipmentItemCard = memo(({
           backgroundColor: disabled ? 'transparent' : 'rgba(255,255,255,0.03)',
           transform: disabled ? 'scale(1)' : 'scale(1.02)',
         },
-        opacity: disabled ? 0.5 : 1,
         pointerEvents: disabled ? 'none' : 'auto',
       }}
     >
