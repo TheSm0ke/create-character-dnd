@@ -52,6 +52,7 @@ export const searchEquipment = async (
             cost: packItem.cost,
             weight: packItem.weight,
             detail: packItem.detail || '',
+            count: packItem.count,
             type: 'item' as const,
           })) as unknown as (Weapon | Armor | Item | Tool)[];
           items.push(...packItems);
@@ -64,9 +65,11 @@ export const searchEquipment = async (
 
     if (response && typeof response === 'object' && 'type' in response && 'data' in response) {
       const data = response.data;
+
       if (Array.isArray(data)) {
         return { items: data as (Weapon | Armor | Item | Tool)[], isPack: false };
       }
+
       if (data && typeof data === 'object' && 'items' in data) {
         const packData = data as PackData;
         const items = packData.items.map((packItem) => ({
@@ -75,10 +78,12 @@ export const searchEquipment = async (
           cost: packItem.cost,
           weight: packItem.weight,
           detail: packItem.detail || '',
+          count: packItem.count,
           type: 'item' as const,
         })) as unknown as (Weapon | Armor | Item | Tool)[];
         return { items, isPack: true };
       }
+
       return { items: [data as Weapon | Armor | Item | Tool], isPack: false };
     }
 

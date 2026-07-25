@@ -158,6 +158,7 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
     const choice = choices[choiceIndex];
     const option = choice.options[optionIndex];
 
+    // Если в опции несколько предметов, используем их напрямую (без запроса)
     if (option.length > 1) {
       const items = option
         .map(item => {
@@ -187,6 +188,7 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
       return;
     }
 
+    // Один предмет — делаем запрос к API
     const optionName = option[0]?.name || '';
     if (!optionName || optionName.trim() === '') {
       setLoadedItems(prev => ({ ...prev, [key]: { items: [], isPack: false } }));
@@ -198,9 +200,28 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
       let itemsResult: unknown[] = [];
       let isPackResult = false;
 
+      // Если result — массив
       if (Array.isArray(result)) {
         itemsResult = result;
-      } else if (result && typeof result === 'object' && 'items' in result) {
+      } 
+      // Если result — объект с type и data (новый формат)
+      else if (result && typeof result === 'object' && 'type' in result && 'data' in result) {
+        const data = (result as any).data;
+        if (Array.isArray(data)) {
+          itemsResult = data;
+        } else if (data && typeof data === 'object') {
+          // Если data — набор (имеет items)
+          if ('items' in data) {
+            itemsResult = (data as any).items || [];
+            isPackResult = true;
+          } else {
+            // Одиночный предмет
+            itemsResult = [data];
+          }
+        }
+      }
+      // Если result — объект с items (старый формат)
+      else if (result && typeof result === 'object' && 'items' in result) {
         const data = result as { items: unknown[]; isPack?: boolean };
         itemsResult = data.items || [];
         isPackResult = data.isPack || false;
@@ -424,26 +445,55 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
                       );
                     }
 
+                    // Если это набор (isPack) или составная опция (несколько предметов) — показываем все как выбранные
                     if (isPack) {
                       return (
                         <Box sx={{ mt: 1 }}>
                           <Typography variant="caption" sx={{ color: theme.palette.text.secondary, display: 'block', mb: 0.5 }}>
                             Состав:
                           </Typography>
-                          <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
-                            {validItems.map((item, i) => {
-                              const type = getItemType(item);
-                              return (
-                                <EquipmentItemCard
-                                  key={i}
-                                  item={item}
-                                  type={type}
-                                  selected={true}
-                                  onSelect={() => {}}
-                                  disabled={true}
-                                />
-                              );
-                            })}
+                          <Box sx={{ display: 'grid', gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: 1 }}>
+                            {validItems.map((item, i) => (
+                              <Box key={i} sx={{ p: 1, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 1, }}>
+                                <Typography variant="body2" sx={{ color: theme.palette.common.white, fontWeight: 500 }}>
+                                  {item.name}
+                                  {item.count && item.count > 1 && ` (×${item.count})`}
+                                </Typography>
+                                {(item.cost || item.weight || item.count) && (
+                                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 0.5 }}>
+                                    {item.cost && (
+                                      <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
+                                        Стоимость: {item.cost}
+                                      </Typography>
+                                    )}
+                                    {item.weight && (
+                                      <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
+                                        Вес: {item.weight}
+                                      </Typography>
+                                    )}
+                                    {item.count && (
+                                      <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
+                                        Количество: {item.count}
+                                      </Typography>
+                                    )}
+                                  </Box>
+                                )}
+                                {item.detail && (
+                                  <Typography
+                                    variant="caption"
+                                    sx={{
+                                      display: 'block',
+                                      color: theme.palette.text.secondary,
+                                      mt: 0.5,
+                                      whiteSpace: 'pre-wrap',
+                                      fontSize: '0.75rem',
+                                    }}
+                                  >
+                                    {item.detail}
+                                  </Typography>
+                                )}
+                              </Box>
+                            ))}
                           </Box>
                         </Box>
                       );
@@ -493,6 +543,7 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
                       );
                     }
 
+                    // Один предмет — показываем карточку
                     const selectedItem = validItems[0];
                     const type = getItemType(selectedItem);
                     return (

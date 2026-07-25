@@ -5,7 +5,8 @@ import type { EquipmentType } from '../../../../../api/equipment';
 import { damageIcons } from './constants';
 
 interface EquipmentItemCardProps {
-  item: Weapon | Armor | Item | Tool;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  item: Weapon | Armor | Item | Tool | any; // добавили any для поддержки ручных предметов
   type: EquipmentType;
   selected: boolean;
   onSelect: () => void;
@@ -28,20 +29,45 @@ export const EquipmentItemCard = memo(({
   let damageType: string | null = null;
   if (type === 'weapon') {
     damageType = (item as Weapon).damageType;
-  } else if (type === 'item') {
+  } else if (type === 'item' && (item as Item).damage_type) {
     damageType = (item as Item).damage_type;
   }
 
-  // Приводим к регистру, как в damageIcons (первая буква заглавная)
   const normalizedDamageType = damageType ? damageType.charAt(0).toUpperCase() + damageType.slice(1).toLowerCase() : null;
   const damageIcon = normalizedDamageType ? damageIcons[normalizedDamageType] : null;
 
   const renderDetails = () => {
+    // Если есть поля cost, weight, detail, count — показываем их (для ручных предметов из набора)
+    const hasManualFields = 'cost' in item || 'weight' in item || 'detail' in item || (item.count && item.count > 1);
+
+    if (hasManualFields && (type === 'item' || type === 'pack')) {
+      return (
+        <Box sx={{ mt: 0.5 }}>
+          {item.cost && (
+            <Typography variant="caption" sx={{ color: theme.palette.text.secondary, display: 'block' }}>
+              Стоимость: {item.cost}
+            </Typography>
+          )}
+          {item.weight && (
+            <Typography variant="caption" sx={{ color: theme.palette.text.secondary, display: 'block' }}>
+              Вес: {item.weight}
+            </Typography>
+          )}
+          {item.detail && (
+            <Typography variant="caption" sx={{ color: theme.palette.text.secondary, display: 'block', whiteSpace: 'pre-wrap', mt: 0.5 }}>
+              {item.detail}
+            </Typography>
+          )}
+        </Box>
+      );
+    }
+
+    // Стандартные типы из API
     switch (type) {
       case 'weapon': {
         const w = item as Weapon;
         return (
-          <Box sx={{ mt: 1 }}>
+          <Box sx={{ mt: 0.5 }}>
             {w.damage && (
               <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
                 Урон: {w.damage} {w.damageType || ''}
@@ -68,7 +94,7 @@ export const EquipmentItemCard = memo(({
       case 'armor': {
         const a = item as Armor;
         return (
-          <Box sx={{ mt: 1 }}>
+          <Box sx={{ mt: 0.5 }}>
             {a.classArmor && (
               <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
                 КД: {a.classArmor}
@@ -98,7 +124,7 @@ export const EquipmentItemCard = memo(({
       case 'tool': {
         const t = item as Tool;
         return (
-          <Box sx={{ mt: 1 }}>
+          <Box sx={{ mt: 0.5 }}>
             {t.detail && (
               <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
                 {t.detail}
@@ -124,8 +150,10 @@ export const EquipmentItemCard = memo(({
       }
       case 'item': {
         const i = item as Item;
+        // Для обычных предметов из API (у них нет cost, weight в интерфейсе)
+        // Но могут быть description, damage_dice и т.д.
         return (
-          <Box sx={{ mt: 1 }}>
+          <Box sx={{ mt: 0.5 }}>
             {i.category && (
               <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
                 Категория: {i.category}
@@ -137,7 +165,7 @@ export const EquipmentItemCard = memo(({
               </Typography>
             )}
             {i.description && (
-              <Typography variant="caption" sx={{ color: theme.palette.text.secondary, display: 'block' }}>
+              <Typography variant="caption" sx={{ color: theme.palette.text.secondary, display: 'block', whiteSpace: 'pre-wrap' }}>
                 {i.description}
               </Typography>
             )}
@@ -152,6 +180,13 @@ export const EquipmentItemCard = memo(({
       default:
         return null;
     }
+  };
+
+  const getTypeLabel = () => {
+    if (type === 'weapon') return 'Оружие';
+    if (type === 'armor') return 'Броня';
+    if (type === 'tool') return 'Инструмент';
+    return 'Предмет';
   };
 
   return (
@@ -197,7 +232,7 @@ export const EquipmentItemCard = memo(({
           />
         )}
         <Chip
-          label={type === 'weapon' ? 'Оружие' : type === 'armor' ? 'Броня' : type === 'tool' ? 'Инструмент' : 'Предмет'}
+          label={getTypeLabel()}
           size="small"
           sx={{ color: 'white', borderColor: 'rgba(255,255,255,0.2)', ml: 'auto' }}
         />
