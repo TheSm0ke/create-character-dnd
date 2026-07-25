@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// src/pages/create-character/ui/select-class/class-configuration/ClassConfiguration.tsx
 import { Box, Typography, useTheme, Button } from '@mui/material';
 import type { SelectChangeEvent } from '@mui/material';
 import { useState, useCallback } from 'react';
@@ -60,19 +59,19 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
   const [selectedSpells1, setSelectedSpells1] = useState<Spell[]>([]);
 
   const [selectedEquipment, setSelectedEquipment] = useState<{
-    [key: number]: { optionIndex: number; specificItemId?: string }
+    [key: number]: { optionIndex: number; specificItemIds: string[] }
   }>(() => {
-    const initial: { [key: number]: { optionIndex: number; specificItemId?: string } } = {};
+    const initial: { [key: number]: { optionIndex: number; specificItemIds: string[] } } = {};
     choices.forEach((choice, index) => {
       if (choice.options.length === 1) {
-        initial[index] = { optionIndex: 0 };
+        initial[index] = { optionIndex: 0, specificItemIds: [] };
       }
     });
     return initial;
   });
 
   const [loadedItems, setLoadedItems] = useState<{
-    [key: string]: { items: any[]; isPack: boolean; weaponItems?: any[]; shieldItem?: any | null; isShieldOption?: boolean }
+    [key: string]: { items: any[]; isPack: boolean; weaponItems?: any[]; shieldItem?: any | null; isShieldOption?: boolean; isMultiSelect?: boolean; maxSelect?: number }
   }>({});
 
   const [itemSearchQueries, setItemSearchQueries] = useState<{ [key: number]: string }>({});
@@ -157,12 +156,15 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
     const choice = choices[choiceIndex];
     const option = choice.options[optionIndex];
 
+    const totalCount = option.reduce((sum: number, item: any) => sum + (item.count || 1), 0);
+    const isMultiSelect = option.length === 1 && totalCount > 1;
+    const maxSelect = isMultiSelect ? totalCount : 0;
+
     const hasShield = option.some((item: any) => item.name && item.name.toLowerCase().includes('щит'));
 
     if (hasShield && option.length > 1) {
       const weaponName = option.find((item: any) => !item.name.toLowerCase().includes('щит'))?.name || '';
       const shieldName = option.find((item: any) => item.name.toLowerCase().includes('щит'))?.name || 'щит';
-
       try {
         const weaponResult = await searchEquipment(weaponName);
         let weaponItems: any[] = [];
@@ -172,33 +174,24 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
           weaponItems = (weaponResult as any).items || [];
         } else if (weaponResult && typeof weaponResult === 'object' && 'type' in weaponResult && 'data' in weaponResult) {
           const data = (weaponResult as any).data;
-          if (Array.isArray(data)) {
-            weaponItems = data;
-          } else if (data && typeof data === 'object') {
-            if ('items' in data) {
-              weaponItems = (data as any).items || [];
-            } else {
-              weaponItems = [data];
-            }
+          if (Array.isArray(data)) weaponItems = data;
+          else if (data && typeof data === 'object') {
+            if ('items' in data) weaponItems = (data as any).items || [];
+            else weaponItems = [data];
           }
         }
 
         const shieldResult = await searchEquipment(shieldName);
         let shieldItem: any = null;
-        if (Array.isArray(shieldResult) && shieldResult.length > 0) {
-          shieldItem = shieldResult[0];
-        } else if (shieldResult && typeof shieldResult === 'object' && 'items' in shieldResult) {
+        if (Array.isArray(shieldResult) && shieldResult.length > 0) shieldItem = shieldResult[0];
+        else if (shieldResult && typeof shieldResult === 'object' && 'items' in shieldResult) {
           shieldItem = (shieldResult as any).items?.[0] || null;
         } else if (shieldResult && typeof shieldResult === 'object' && 'type' in shieldResult && 'data' in shieldResult) {
           const data = (shieldResult as any).data;
-          if (Array.isArray(data) && data.length > 0) {
-            shieldItem = data[0];
-          } else if (data && typeof data === 'object') {
-            if ('items' in data) {
-              shieldItem = (data as any).items?.[0] || null;
-            } else {
-              shieldItem = data;
-            }
+          if (Array.isArray(data) && data.length > 0) shieldItem = data[0];
+          else if (data && typeof data === 'object') {
+            if ('items' in data) shieldItem = (data as any).items?.[0] || null;
+            else shieldItem = data;
           }
         }
 
@@ -218,7 +211,7 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
             ...prev,
             [choiceIndex]: {
               ...prev[choiceIndex],
-              specificItemId: weaponItems[0]._id,
+              specificItemIds: [weaponItems[0]._id],
             }
           }));
         }
@@ -238,6 +231,47 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
       return;
     }
 
+    if (isMultiSelect) {
+      const searchName = option[0]?.name || '';
+      try {
+        const result = await searchEquipment(searchName);
+        let itemsResult: any[] = [];
+        if (Array.isArray(result)) {
+          itemsResult = result;
+        } else if (result && typeof result === 'object' && 'items' in result) {
+          itemsResult = (result as any).items || [];
+        } else if (result && typeof result === 'object' && 'type' in result && 'data' in result) {
+          const data = (result as any).data;
+          if (Array.isArray(data)) itemsResult = data;
+          else if (data && typeof data === 'object') {
+            if ('items' in data) itemsResult = (data as any).items || [];
+            else itemsResult = [data];
+          }
+        }
+        setLoadedItems(prev => ({
+          ...prev,
+          [key]: {
+            items: itemsResult,
+            isPack: false,
+            isMultiSelect: true,
+            maxSelect: maxSelect,
+          }
+        }));
+      } catch (e) {
+        console.error('Ошибка загрузки для множественного выбора:', e);
+        setLoadedItems(prev => ({
+          ...prev,
+          [key]: {
+            items: [],
+            isPack: false,
+            isMultiSelect: true,
+            maxSelect: maxSelect,
+          }
+        }));
+      }
+      return;
+    }
+
     if (option.length > 1) {
       const names = option.map((item: any) => item.name).filter(Boolean);
       try {
@@ -249,9 +283,8 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
             allItems = allItems.concat(result);
           } else if (result && typeof result === 'object' && 'type' in result && 'data' in result) {
             const data = (result as any).data;
-            if (Array.isArray(data)) {
-              allItems = allItems.concat(data);
-            } else if (data && typeof data === 'object') {
+            if (Array.isArray(data)) allItems = allItems.concat(data);
+            else if (data && typeof data === 'object') {
               if ('items' in data) {
                 allItems = allItems.concat((data as any).items || []);
                 isPack = true;
@@ -265,13 +298,13 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
             isPack = isPack || (data.isPack || false);
           }
         }
-        setLoadedItems(prev => ({ ...prev, [key]: { items: allItems, isPack } }));
+        setLoadedItems(prev => ({ ...prev, [key]: { items: allItems, isPack, isMultiSelect: false } }));
         if (allItems.length === 1) {
           setSelectedEquipment(prev => ({
             ...prev,
             [choiceIndex]: {
               ...prev[choiceIndex],
-              specificItemId: allItems[0]._id,
+              specificItemIds: [allItems[0]._id],
             }
           }));
         }
@@ -291,14 +324,14 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
             };
           })
           .filter((item: any) => item !== null);
-        setLoadedItems(prev => ({ ...prev, [key]: { items, isPack: false } }));
+        setLoadedItems(prev => ({ ...prev, [key]: { items, isPack: false, isMultiSelect: false } }));
       }
       return;
     }
 
     const optionName = option[0]?.name || '';
     if (!optionName || optionName.trim() === '') {
-      setLoadedItems(prev => ({ ...prev, [key]: { items: [], isPack: false } }));
+      setLoadedItems(prev => ({ ...prev, [key]: { items: [], isPack: false, isMultiSelect: false } }));
       return;
     }
 
@@ -311,9 +344,8 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
         itemsResult = result;
       } else if (result && typeof result === 'object' && 'type' in result && 'data' in result) {
         const data = (result as any).data;
-        if (Array.isArray(data)) {
-          itemsResult = data;
-        } else if (data && typeof data === 'object') {
+        if (Array.isArray(data)) itemsResult = data;
+        else if (data && typeof data === 'object') {
           if ('items' in data) {
             itemsResult = (data as any).items || [];
             isPackResult = true;
@@ -327,38 +359,53 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
         isPackResult = data.isPack || false;
       }
 
-      setLoadedItems(prev => ({ ...prev, [key]: { items: itemsResult, isPack: isPackResult } }));
+      setLoadedItems(prev => ({ ...prev, [key]: { items: itemsResult, isPack: isPackResult, isMultiSelect: false } }));
       if (itemsResult.length === 1) {
         setSelectedEquipment(prev => ({
           ...prev,
           [choiceIndex]: {
             ...prev[choiceIndex],
-            specificItemId: itemsResult[0]?._id,
+            specificItemIds: [itemsResult[0]._id],
           }
         }));
       }
     } catch (e) {
       console.error('Ошибка загрузки предметов:', e);
-      setLoadedItems(prev => ({ ...prev, [key]: { items: [], isPack: false } }));
+      setLoadedItems(prev => ({ ...prev, [key]: { items: [], isPack: false, isMultiSelect: false } }));
     }
   }, [choices, loadedItems]);
 
   const handleEquipmentOptionSelect = useCallback((choiceIndex: number, optionIndex: number) => {
     setSelectedEquipment(prev => ({
       ...prev,
-      [choiceIndex]: { optionIndex, specificItemId: undefined }
+      [choiceIndex]: { optionIndex, specificItemIds: [] }
     }));
     loadItemsForOption(choiceIndex, optionIndex);
   }, [loadItemsForOption]);
 
   const handleSpecificItemSelect = useCallback((choiceIndex: number, itemId: string) => {
-    setSelectedEquipment(prev => ({
-      ...prev,
-      [choiceIndex]: {
-        ...prev[choiceIndex],
-        specificItemId: itemId,
+    setSelectedEquipment(prev => {
+      const current = prev[choiceIndex];
+      if (!current) return prev;
+      const ids = current.specificItemIds || [];
+      const key = `${choiceIndex}-${current.optionIndex}`;
+      const data = loadedItems[key];
+      const maxSelect = data?.isMultiSelect ? (data.maxSelect || 1) : 1;
+
+      if (ids.includes(itemId)) {
+        return { ...prev, [choiceIndex]: { ...current, specificItemIds: ids.filter(id => id !== itemId) } };
       }
-    }));
+      if (ids.length >= maxSelect) return prev;
+      return { ...prev, [choiceIndex]: { ...current, specificItemIds: [...ids, itemId] } };
+    });
+  }, [loadedItems]);
+
+  const handleRemoveSpecificItem = useCallback((choiceIndex: number, itemId: string) => {
+    setSelectedEquipment(prev => {
+      const current = prev[choiceIndex];
+      if (!current) return prev;
+      return { ...prev, [choiceIndex]: { ...current, specificItemIds: current.specificItemIds.filter(id => id !== itemId) } };
+    });
   }, []);
 
   const applyRecommendedCantrips = useCallback(() => {
@@ -387,15 +434,28 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
       const key = `${i}-${selection.optionIndex}`;
       const data = loadedItems[key];
       if (!data) return false;
+
       if (data.isShieldOption) {
         const weaponItems = data.weaponItems || [];
-        if (weaponItems.length > 1 && !selection.specificItemId) return false;
+        if (weaponItems.length > 1 && selection.specificItemIds.length === 0) return false;
         continue;
       }
+
+      if (data.isMultiSelect) {
+        const maxSelect = data.maxSelect || 1;
+        if (selection.specificItemIds.length < maxSelect) return false;
+        continue;
+      }
+
       const items = data.items || [];
       const isPack = data.isPack;
       if (isPack) continue;
-      if (items.length > 1 && !selection.specificItemId) return false;
+
+      if (items.length === 1 && !data.isMultiSelect && !data.isShieldOption) {
+        if (selection.specificItemIds.length === 0) return false;
+        continue;
+      }
+      if (items.length > 1 && selection.specificItemIds.length === 0) return false;
     }
 
     if (subclasses.length > 0 && !selectedSubclass) return false;
@@ -416,11 +476,17 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
       if (data.isShieldOption) {
         const weaponItems = data.weaponItems || [];
         const shieldItem = data.shieldItem;
-        const chosenWeapon = weaponItems.find((item: any) => item._id === selection.specificItemId);
+        const chosenWeapon = weaponItems.find((item: any) => item._id === selection.specificItemIds[0]);
         const result = [];
         if (chosenWeapon) result.push(chosenWeapon.name);
         if (shieldItem) result.push(shieldItem.name);
         return result;
+      }
+
+      if (data.isMultiSelect) {
+        const items = data.items || [];
+        const selectedItems = items.filter((item: any) => selection.specificItemIds.includes(item._id));
+        return selectedItems.map((item: any) => item.name);
       }
 
       const items = data.items || [];
@@ -428,7 +494,7 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
       if (isPack || items.length > 1) {
         return items.map((item: any) => item.name);
       } else {
-        const found = items.find((item: any) => item._id === selection.specificItemId);
+        const found = items.find((item: any) => item._id === selection.specificItemIds[0]);
         if (found) return [found.name];
         if (items.length > 0) return [items[0].name];
         const option = choice.options[selection.optionIndex];
@@ -472,6 +538,7 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
         filterItems={filterItems}
         handleEquipmentOptionSelect={handleEquipmentOptionSelect}
         handleSpecificItemSelect={handleSpecificItemSelect}
+        handleRemoveSpecificItem={handleRemoveSpecificItem}
       />
 
       <SubclassSelection subclasses={subclasses} selectedSubclass={selectedSubclass} onChange={handleSubclassChange} />
