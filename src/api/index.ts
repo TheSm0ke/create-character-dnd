@@ -1,5 +1,6 @@
 // src/api/index.ts
 export * from './classes';
+export * from './alignments';
 export * from './races';
 export * from './spells';
 export * from './skills';

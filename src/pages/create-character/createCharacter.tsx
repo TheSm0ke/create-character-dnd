@@ -8,19 +8,25 @@ import {
   Stepper,
 } from "@mui/material";
 import { useState } from "react";
-import { fetchRaces, fetchClasses, fetchBackgrounds } from "../../api";
+import { fetchRaces, fetchClasses, fetchBackgrounds, fetchAlignments } from "../../api";
 import { useFetch } from "../../api/useFetch";
 import { SelectRace } from "./ui/select-race/selectRace";
-import { SelectClass } from "./ui/select-class/selectedClass";
+import {
+  ClassSelection,
+  type ClassConfiguration,
+} from "./ui/select-class/classSelection";
 import { SelectBackground } from "./ui/select-background";
 import { SelectPersonality } from "./ui/select-personality";
+import { SelectAlignment } from "./ui/select-alignment";
+import { CharacterSheet } from "./ui/character-sheet";
 import {
   SelectAbilities,
   createAbilityScores,
   isAbilityScoresValid,
+  isSkillSelectionValid,
   type AbilityScores,
 } from "./ui/select-abilities";
-import type { Race, Class, Background } from "../../api";
+import type { Race, Class, Background, Alignment } from "../../api";
 
 const steps = [
   "Выбор расы",
@@ -29,6 +35,7 @@ const steps = [
   "Черты характера",
   "Характеристики",
   "Мировоззрение",
+  "Лист персонажа",
 ];
 
 const CreateCharacter = () => {
@@ -38,6 +45,9 @@ const CreateCharacter = () => {
   const [selectedClass, setSelectedClass] = useState<Class | null>(null);
   const [selectedBackground, setSelectedBackground] =
     useState<Background | null>(null);
+  const [selectedAlignment, setSelectedAlignment] = useState<Alignment | null>(null);
+  const [characterName, setCharacterName] = useState("");
+  const [currentHitPoints, setCurrentHitPoints] = useState<number | null>(null);
   const [selectedPersonality, setSelectedPersonality] = useState<{
     traits: string[];
     ideals: string[];
@@ -47,6 +57,9 @@ const CreateCharacter = () => {
   const [abilityScores, setAbilityScores] = useState<AbilityScores | null>(
     null,
   );
+  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+  const [classConfiguration, setClassConfiguration] =
+    useState<ClassConfiguration | null>(null);
 
   const {
     data: races,
@@ -63,13 +76,25 @@ const CreateCharacter = () => {
     loading: backgroundsLoading,
     error: backgroundsError,
   } = useFetch(fetchBackgrounds);
+  const {
+    data: alignments,
+    loading: alignmentsLoading,
+    error: alignmentsError,
+  } = useFetch(fetchAlignments);
 
   const handleNext = () => {
     if (activeStep === 0 && !selectedRace) return;
-    if (activeStep === 1 && !selectedClass) return;
+    if (activeStep === 1 && (!selectedClass || !classConfiguration)) return;
     if (activeStep === 2 && !selectedBackground) return;
     if (activeStep === 3 && !selectedPersonality) return;
-    if (activeStep === 4 && !isAbilityScoresValid(abilityScores)) return;
+    if (
+      activeStep === 4 &&
+      (!isAbilityScoresValid(abilityScores) ||
+        !isSkillSelectionValid(selectedSkills, selectedClass))
+    ) {
+      return;
+    }
+    if (activeStep === 5 && !selectedAlignment) return;
     setActiveStep((prev) => prev + 1);
   };
 
@@ -79,21 +104,43 @@ const CreateCharacter = () => {
 
   const isStepValid = () => {
     if (activeStep === 0) return !!selectedRace;
-    if (activeStep === 1) return !!selectedClass;
+    if (activeStep === 1) return !!selectedClass && !!classConfiguration;
     if (activeStep === 2) return !!selectedBackground;
     if (activeStep === 3) return !!selectedPersonality;
-    if (activeStep === 4) return isAbilityScoresValid(abilityScores);
+    if (activeStep === 4) {
+      return (
+        isAbilityScoresValid(abilityScores) &&
+        isSkillSelectionValid(selectedSkills, selectedClass)
+      );
+    }
+    if (activeStep === 5) return !!selectedAlignment;
     return true;
   };
 
-  const handleSelectClass = (cls: Class) => {
+  const handleSelectClass = (cls: Class, configuration: ClassConfiguration) => {
     if (selectedClass?._id !== cls._id) {
       setAbilityScores(createAbilityScores(cls.recommended_stats));
+      setSelectedSkills([]);
+      setCurrentHitPoints(null);
     }
     setSelectedClass(cls);
+    setClassConfiguration(configuration);
   };
 
-  if (racesLoading || classesLoading || backgroundsLoading) {
+  const handleClassConfigurationStart = () => {
+    setSelectedClass(null);
+    setClassConfiguration(null);
+    setSelectedSkills([]);
+  };
+
+  const handleSelectRace = (race: Race) => {
+    if (selectedRace?._id !== race._id) {
+      setSelectedSkills([]);
+    }
+    setSelectedRace(race);
+  };
+
+  if (racesLoading || classesLoading || backgroundsLoading || alignmentsLoading) {
     return (
       <Box
         sx={{
@@ -118,6 +165,9 @@ const CreateCharacter = () => {
     return (
       <Typography>Ошибка загрузки происхождений: {backgroundsError}</Typography>
     );
+  }
+  if (alignmentsError) {
+    return <Typography>Ошибка загрузки мировоззрений: {alignmentsError}</Typography>;
   }
 
   return (
@@ -148,14 +198,15 @@ const CreateCharacter = () => {
           <SelectRace
             races={races || []}
             selectedRace={selectedRace}
-            onSelectRace={setSelectedRace}
+            onSelectRace={handleSelectRace}
           />
         )}
         {activeStep === 1 && (
-          <SelectClass
+          <ClassSelection
             classes={classes || []}
-            selectedClass={selectedClass}
-            onSelectClass={handleSelectClass}
+            onSelect={handleSelectClass}
+            onConfigurationStart={handleClassConfigurationStart}
+            onBack={handleBack}
           />
         )}
         {activeStep === 2 && (
@@ -176,12 +227,41 @@ const CreateCharacter = () => {
             selectedClass={selectedClass}
             selectedRace={selectedRace}
             scores={abilityScores}
+            selectedSkills={selectedSkills}
             onChange={setAbilityScores}
+            onSkillsChange={setSelectedSkills}
           />
         )}
         {activeStep === 5 && (
-          <Typography>Шаг 6: Выбор мировоззрения (в разработке)</Typography>
+          <SelectAlignment
+            alignments={alignments || []}
+            selectedAlignment={selectedAlignment}
+            onSelectAlignment={setSelectedAlignment}
+          />
         )}
+        {activeStep === 6 &&
+          selectedClass &&
+          selectedRace &&
+          selectedBackground &&
+          selectedAlignment &&
+          selectedPersonality &&
+          abilityScores &&
+          classConfiguration && (
+            <CharacterSheet
+              race={selectedRace}
+              characterClass={selectedClass}
+              background={selectedBackground}
+              alignment={selectedAlignment}
+              personality={selectedPersonality}
+              abilityScores={abilityScores}
+              selectedSkills={selectedSkills}
+              classConfiguration={classConfiguration}
+              characterName={characterName}
+              currentHitPoints={currentHitPoints}
+              onCharacterNameChange={setCharacterName}
+              onCurrentHitPointsChange={setCurrentHitPoints}
+            />
+          )}
       </Box>
 
       <Box sx={{ display: "flex", justifyContent: "space-between", p: 2 }}>

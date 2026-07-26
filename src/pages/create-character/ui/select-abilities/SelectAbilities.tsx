@@ -18,6 +18,7 @@ import {
   isAbilityScoresValid,
   type AbilityScores,
 } from "./abilityScores";
+import { SelectSkills } from "./SelectSkills";
 
 const ABILITIES: Array<{
   key: AbilityKey;
@@ -117,14 +118,18 @@ interface SelectAbilitiesProps {
   selectedClass: Class;
   selectedRace: Race;
   scores: AbilityScores;
+  selectedSkills: string[];
   onChange: (scores: AbilityScores) => void;
+  onSkillsChange: (skills: string[]) => void;
 }
 
 export const SelectAbilities = ({
   selectedClass,
   selectedRace,
   scores,
+  selectedSkills,
   onChange,
+  onSkillsChange,
 }: SelectAbilitiesProps) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -451,6 +456,16 @@ export const SelectAbilities = ({
           14, 13, 12, 10 и 8. Расовые бонусы в это ограничение не входят.
         </Alert>
       )}
+
+      <SelectSkills
+        selectedClass={selectedClass}
+        selectedRace={selectedRace}
+        scores={Object.fromEntries(
+          ABILITIES.map(({ key }) => [key, scores[key] + raceBonuses[key]]),
+        ) as AbilityScores}
+        selectedSkills={selectedSkills}
+        onChange={onSkillsChange}
+      />
     </Box>
   );
 };

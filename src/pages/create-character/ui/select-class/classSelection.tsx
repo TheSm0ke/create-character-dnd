@@ -3,31 +3,39 @@ import { ClassConfiguration } from './class-configuration/ClassConfiguration';
 import { ClassList } from './classList';
 import type { Class, Spell } from '../../../../api';
 
+export interface ClassConfiguration {
+  skills: string[];
+  equipment: string[][];
+  subclass?: string;
+  instruments?: string[];
+  cantrips: Spell[];
+  spells1: Spell[];
+}
+
 interface ClassSelectionProps {
   classes: Class[];
-  onSelect: (config: {
-    skills: string[];
-    equipment: string[][];
-    subclass?: string;
-    instruments?: string[];
-    cantrips: Spell[];
-    spells1: Spell[];
-  }) => void;
+  onSelect: (classData: Class, config: ClassConfiguration) => void;
+  onConfigurationStart: () => void;
   onBack: () => void;
 }
 
-export const ClassSelection = ({ classes, onSelect, onBack }: ClassSelectionProps) => {
+export const ClassSelection = ({
+  classes,
+  onSelect,
+  onConfigurationStart,
+  onBack,
+}: ClassSelectionProps) => {
   const [selectedClass, setSelectedClass] = useState<Class | null>(null);
 
-  const handleConfirm = (config: {
-    skills: string[];
-    equipment: string[][];
-    subclass?: string;
-    instruments?: string[];
-    cantrips: Spell[];
-    spells1: Spell[];
-  }) => {
-    onSelect(config);
+  const handleClassSelect = (classData: Class) => {
+    onConfigurationStart();
+    setSelectedClass(classData);
+  };
+
+  const handleConfirm = (config: ClassConfiguration) => {
+    if (selectedClass) {
+      onSelect(selectedClass, config);
+    }
   };
 
   if (!selectedClass) {
@@ -35,7 +43,7 @@ export const ClassSelection = ({ classes, onSelect, onBack }: ClassSelectionProp
       <ClassList
         classes={classes}
         selectedClass={selectedClass}
-        onSelect={setSelectedClass}
+        onSelect={handleClassSelect}
         onBack={onBack}
       />
     );
@@ -45,6 +53,7 @@ export const ClassSelection = ({ classes, onSelect, onBack }: ClassSelectionProp
     <ClassConfiguration
       classData={selectedClass}
       onConfirm={handleConfirm}
+      selectSkills={false}
       onBack={() => setSelectedClass(null)}
     />
   );

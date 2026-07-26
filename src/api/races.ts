@@ -24,6 +24,7 @@ export interface Race {
   speed: number;
   size: string;
   languages: { name: string; source: string }[];
+  skill_proficiencies?: string[];
   traits: RaceTrait[];
   subraces: Subrace[];
 }

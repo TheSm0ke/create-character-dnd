@@ -5,6 +5,7 @@ import { useState, useCallback } from 'react';
 import { fetchSpellsByClassAndLevel, type Class, type Spell } from '../../../../../api';
 import { useFetch } from '../../../../../api/useFetch';
 import { SelectSkills } from '../selectedSkills';
+import { ClassHeading } from '../ClassHeading';
 import { useSpellCounts } from './hooks/useSpellCounts';
 import { useSpellFilter } from './hooks/useSpellFilter';
 import { useEquipmentSelection } from './hooks/useEquipmentSelection';
@@ -14,6 +15,8 @@ import { FixedEquipmentDisplay } from './ui/FixedEquipmentDisplay';
 import { SubclassSelection } from './ui/SubclassSelection';
 import { InstrumentSelection } from './ui/InstrumentSelection';
 import { recommendedSpells } from './constants';
+import { hasSpellcasting } from '../spellcastingUtils';
+import { getSubclassUnlockLevel } from './subclassUtils';
 
 interface ClassConfigurationProps {
   classData: Class;
@@ -25,17 +28,29 @@ interface ClassConfigurationProps {
     cantrips: Spell[];
     spells1: Spell[];
   }) => void;
+  selectSkills?: boolean;
+  characterLevel?: number;
   onBack: () => void;
 }
 
-export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfigurationProps) => {
+export const ClassConfiguration = ({
+  classData,
+  onConfirm,
+  selectSkills = true,
+  characterLevel = 1,
+  onBack,
+}: ClassConfigurationProps) => {
   const theme = useTheme();
   const { proficiencies, subclasses, spellcasting, name, fixed_equipment, choices } = classData;
+  const isSpellcaster = hasSpellcasting(spellcasting);
+  const availableSubclasses = subclasses.filter(
+    (subclass) => getSubclassUnlockLevel(subclass) <= characterLevel,
+  );
 
   const { cantripsToChoose, spells1ToChoose } = useSpellCounts(classData);
 
   const fetchSpellsData = useCallback(async () => {
-    if (!spellcasting || (cantripsToChoose === 0 && spells1ToChoose === 0)) {
+    if (!isSpellcaster || (cantripsToChoose === 0 && spells1ToChoose === 0)) {
       return { cantrips: [] as Spell[], spells1: [] as Spell[] };
     }
     const className = name.toLowerCase();
@@ -44,7 +59,7 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
       fetchSpellsByClassAndLevel(className, 1),
     ]);
     return { cantrips, spells1 };
-  }, [name, spellcasting, cantripsToChoose, spells1ToChoose]);
+  }, [name, isSpellcaster, cantripsToChoose, spells1ToChoose]);
 
   const { data: spellsData, loading, error } = useFetch(fetchSpellsData);
 
@@ -53,7 +68,7 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
 
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [selectedSubclass, setSelectedSubclass] = useState<string>(
-    subclasses.length > 0 ? subclasses[0].id : ''
+    availableSubclasses[0]?.id ?? '',
   );
   const [selectedInstruments, setSelectedInstruments] = useState<string[]>([]);
   const [selectedCantrips, setSelectedCantrips] = useState<Spell[]>([]);
@@ -90,8 +105,8 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
     );
   };
 
-  const handleSubclassChange = (event: SelectChangeEvent) => {
-    setSelectedSubclass(event.target.value);
+  const handleSubclassChange = (subclassId: string) => {
+    setSelectedSubclass(subclassId);
   };
 
   const handleInstrumentChange = (event: SelectChangeEvent<string[]>) => {
@@ -133,7 +148,7 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
   const allSelected = () => {
     if (loading) return false;
     const skillsToChoose = proficiencies.skills.number_to_choose;
-    if (skillsToChoose > 0 && selectedSkills.length < skillsToChoose) return false;
+    if (selectSkills && skillsToChoose > 0 && selectedSkills.length < skillsToChoose) return false;
 
     for (let i = 0; i < choices.length; i++) {
       const selection = selectedEquipment[i];
@@ -165,7 +180,7 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
       if (items.length > 1 && selection.specificItemIds.length === 0) return false;
     }
 
-    if (subclasses.length > 0 && !selectedSubclass) return false;
+    if (availableSubclasses.length > 0 && !selectedSubclass) return false;
     if (instrumentCount > 0 && selectedInstruments.length < instrumentCount) return false;
     if (cantripsToChoose > 0 && selectedCantrips.length < cantripsToChoose) return false;
     if (spells1ToChoose > 0 && selectedSpells1.length < spells1ToChoose) return false;
@@ -209,9 +224,9 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
       }
     });
     onConfirm({
-      skills: selectedSkills,
+      skills: selectSkills ? selectedSkills : [],
       equipment,
-      subclass: subclasses.length > 0 ? selectedSubclass : undefined,
+      subclass: availableSubclasses.length > 0 ? selectedSubclass : undefined,
       instruments: instrumentCount > 0 ? selectedInstruments : undefined,
       cantrips: selectedCantrips,
       spells1: selectedSpells1,
@@ -220,12 +235,19 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
 
   return (
     <Box sx={{ p: 2, maxWidth: '100%', boxSizing: 'border-box' }}>
+      <ClassHeading
+        title={`Настройка класса: ${name}`}
+        description={classData.description}
+        isSpellcaster={isSpellcaster}
+      />
+      <Box sx={{ display: 'none' }}>
       <Typography variant="h5" sx={{ color: theme.palette.common.white, mb: 2 }}>
         Настройка класса: {name}
       </Typography>
+      </Box>
       {error && <Typography color="error" sx={{ mb: 2 }}>Ошибка: {error}</Typography>}
 
-      {proficiencies.skills.number_to_choose > 0 && (
+      {selectSkills && proficiencies.skills.number_to_choose > 0 && (
         <SelectSkills
           proficiencies={proficiencies}
           selectedSkills={selectedSkills}
@@ -248,11 +270,16 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
         handleRemoveSpecificItem={handleRemoveSpecificItem}
       />
 
-      <SubclassSelection subclasses={subclasses} selectedSubclass={selectedSubclass} onChange={handleSubclassChange} />
+      <SubclassSelection
+        subclasses={subclasses}
+        selectedSubclass={selectedSubclass}
+        currentLevel={characterLevel}
+        onChange={handleSubclassChange}
+      />
 
       <InstrumentSelection instrumentCount={instrumentCount} selectedInstruments={selectedInstruments} onChange={handleInstrumentChange} />
 
-      {spellcasting && cantripsToChoose > 0 && (
+      {isSpellcaster && cantripsToChoose > 0 && (
         <SpellSelection
           title="Выберите заговоры"
           spells={cantripFilter.filteredSpells}
@@ -272,7 +299,7 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
         />
       )}
 
-      {spellcasting && spells1ToChoose > 0 && (
+      {isSpellcaster && spells1ToChoose > 0 && (
         <SpellSelection
           title="Выберите заклинания 1-го уровня"
           spells={spell1Filter.filteredSpells}

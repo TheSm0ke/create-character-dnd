@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { useTheme } from '@mui/material/styles';
+import { alpha, useTheme } from '@mui/material/styles';
 import { Box, Typography, Button, Chip, Divider, useMediaQuery } from '@mui/material';
 import type { Class } from '../../../../api';
+import { ClassHeading } from './ClassHeading';
+import { hasSpellcasting } from './spellcastingUtils';
 
 // ==============================
 // Карточка одного класса
@@ -34,6 +36,7 @@ const ClassCard = ({
   } = classData;
 
   const handleClick = () => onSelect();
+  const isSpellcaster = hasSpellcasting(spellcasting);
 
   const sortedLevels = [...levels].sort((a, b) => a.level - b.level);
   const firstLevels = sortedLevels.slice(0, 3);
@@ -48,14 +51,14 @@ const ClassCard = ({
       onMouseLeave={() => setHover(false)}
       onClick={handleClick}
       sx={{
-        padding: isMobile ? '0px 20px 20px 20px' : '0px 25px 25px 25px',
+        padding: isMobile ? '0px 18px 20px' : '0px 22px 24px',
         borderRadius: 2,
         border: '2px solid',
         borderColor: selected
           ? theme.palette.primary.main
           : hover
           ? theme.palette.primary.light
-          : 'rgba(255,255,255,0.08)',
+          : theme.palette.divider,
         margin: 0,
         textAlign: 'left',
         position: 'relative',
@@ -63,12 +66,12 @@ const ClassCard = ({
         transition: 'transform 0.25s ease, border-color 0.3s ease, background-color 0.3s ease',
         transform: selected ? 'scale(1.02)' : hover ? 'scale(1.01)' : 'scale(1)',
         backgroundColor: selected
-          ? 'rgba(170, 59, 255, 0.12)'
+          ? alpha(theme.palette.primary.main, 0.12)
           : hover
-          ? 'rgba(255,255,255,0.03)'
+          ? alpha(theme.palette.text.primary, 0.03)
           : 'transparent',
         cursor: 'pointer',
-        boxShadow: selected ? `0 0 20px ${theme.palette.primary.main}40` : 'none',
+        boxShadow: selected ? `0 0 20px ${alpha(theme.palette.primary.main, 0.25)}` : 'none',
         maxHeight: 600,
         overflowY: 'auto',
         '&::-webkit-scrollbar': {
@@ -88,18 +91,31 @@ const ClassCard = ({
         sx={{
           position: 'sticky',
           top: 0,
-          backgroundColor: selected ? 'rgba(170, 59, 255, 0.12)' : 'transparent',
+          backgroundColor: selected
+            ? alpha(theme.palette.primary.main, 0.16)
+            : alpha(theme.palette.background.paper, 0.96),
           zIndex: 1,
-          paddingBottom: 1,
+          pt: 2,
+          paddingBottom: 1.5,
           backdropFilter: 'blur(4px)',
           borderRadius: '8px',
         }}
       >
+        <ClassHeading
+          title={name}
+          subtitle={`Основная характеристика: ${primary_ability}`}
+          description={description}
+          isSpellcaster={isSpellcaster}
+          isMobile={isMobile}
+        />
+        <Box sx={{ display: 'none' }}>
         <Typography
           variant={isMobile ? 'h6' : 'h5'}
           sx={{
-            color: theme.palette.common.white,
-            fontWeight: 600,
+            color: theme.palette.secondary.main,
+            fontFamily: '"Cinzel", serif',
+            fontWeight: 700,
+            letterSpacing: '0.04em',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -111,10 +127,14 @@ const ClassCard = ({
             <span style={{ fontSize: '0.8rem', color: theme.palette.primary.main }}>✨</span>
           )}
         </Typography>
+        <Typography variant="caption" sx={{ color: theme.palette.text.secondary, display: 'block', mb: 0.5 }}>
+          Основная характеристика: {primary_ability}
+        </Typography>
         <Typography variant="body2" sx={{ color: theme.palette.text.secondary, mb: 1.5, fontSize: '0.9rem' }}>
           {description}
         </Typography>
-        <Divider sx={{ borderColor: 'rgba(255,255,255,0.1)', mb: 1.5 }} />
+        <Divider sx={{ borderColor: theme.palette.divider, mb: 1.5 }} />
+        </Box>
       </Box>
 
       {/* Основные параметры */}
@@ -145,13 +165,13 @@ const ClassCard = ({
           <Typography variant="caption" sx={{ color: theme.palette.primary.main }}>Владения</Typography>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
             {proficiencies.armor.map((item) => (
-              <Chip key={item} label={item} size="small" sx={{ color: 'white', borderColor: 'rgba(255,255,255,0.2)' }} />
+                      <Chip key={item} label={item} size="small" sx={{ color: theme.palette.common.white, borderColor: theme.palette.divider }} />
             ))}
             {proficiencies.weapons.map((item) => (
-              <Chip key={item} label={item} size="small" sx={{ color: 'white', borderColor: 'rgba(255,255,255,0.2)' }} />
+                      <Chip key={item} label={item} size="small" sx={{ color: theme.palette.common.white, borderColor: theme.palette.divider }} />
             ))}
             {proficiencies.tools.map((item) => (
-              <Chip key={item} label={item} size="small" sx={{ color: 'white', borderColor: 'rgba(255,255,255,0.2)' }} />
+                      <Chip key={item} label={item} size="small" sx={{ color: theme.palette.common.white, borderColor: theme.palette.divider }} />
             ))}
           </Box>
         </Box>
@@ -282,7 +302,7 @@ const ClassCard = ({
       )}
 
       {/* Заклинания */}
-      {spellcasting && (
+      {isSpellcaster && (
         <Box sx={{ mb: 1 }}>
           <Typography variant="caption" sx={{ color: theme.palette.primary.main }}>Заклинания</Typography>
           <Typography variant="body2" sx={{ color: theme.palette.common.white }}>
@@ -294,7 +314,7 @@ const ClassCard = ({
 
       {/* Индикатор выбора */}
       {selected && (
-        <Box sx={{ mt: 1, p: 1, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 1 }}>
+        <Box sx={{ mt: 1, p: 1, backgroundColor: alpha(theme.palette.text.primary, 0.05), borderRadius: 1 }}>
           <Typography variant="caption" sx={{ color: theme.palette.primary.main }}>Выбран</Typography>
         </Box>
       )}
@@ -317,16 +337,34 @@ export const ClassList = ({ classes, selectedClass, onSelect, onBack }: ClassLis
 
   return (
     <Box sx={{ p: 2 }}>
-      <Typography variant="h5" sx={{ color: theme.palette.common.white, mb: 2 }}>
+      <Typography
+        variant="h4"
+        sx={{
+          color: theme.palette.secondary.main,
+          fontFamily: '"Cinzel", serif',
+          fontWeight: 700,
+          letterSpacing: '0.04em',
+          mb: 2.5,
+        }}
+      >
         Выберите класс
       </Typography>
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: {
+            xs: '1fr',
+            sm: 'repeat(2, minmax(0, 1fr))',
+            lg: 'repeat(3, minmax(0, 1fr))',
+          },
+          gap: 2,
+          alignItems: 'stretch',
+        }}
+      >
         {classes.map((cls) => (
           <Box
             key={cls._id}
-            sx={{
-              width: { xs: '100%', sm: 'calc(50% - 8px)', md: 'calc(33.33% - 10px)' },
-            }}
+            sx={{ minWidth: 0 }}
           >
             <ClassCard
               classData={cls}

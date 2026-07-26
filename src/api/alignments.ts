@@ -7,6 +7,14 @@ export interface Alignment {
   description: string;
 }
 
-export const fetchAlignments = (): Promise<Alignment[]> => get<Alignment[]>('/alignments');
+interface AlignmentsResponse {
+  value: Alignment[];
+  Count?: number;
+}
+
+export const fetchAlignments = async (): Promise<Alignment[]> => {
+  const response = await get<Alignment[] | AlignmentsResponse>('/alignments');
+  return Array.isArray(response) ? response : response.value;
+};
 export const fetchAlignmentById = (id: string): Promise<Alignment> => get<Alignment>(`/alignments/${id}`);
 export const fetchAlignmentByName = (name: string): Promise<Alignment[]> => get<Alignment[]>(`/alignments/search?name=${encodeURIComponent(name)}`);
