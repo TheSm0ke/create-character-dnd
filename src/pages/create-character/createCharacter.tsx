@@ -1,33 +1,75 @@
 // src/pages/create-character/createCharacter.tsx
-import { Box, Typography, Button, Step, StepLabel, Stepper } from '@mui/material';
-import { useState } from 'react';
-import { fetchRaces, fetchClasses, fetchBackgrounds } from '../../api';
-import { useFetch } from '../../api/useFetch';
-import { SelectRace } from './ui/select-race/selectRace';
-import { SelectClass } from './ui/select-class/selectedClass';
-import { SelectBackground } from './ui/select-background';
-import { SelectPersonality } from './ui/select-personality';
-import type { Race, Class, Background } from '../../api';
+import {
+  Box,
+  Typography,
+  Button,
+  Step,
+  StepLabel,
+  Stepper,
+} from "@mui/material";
+import { useState } from "react";
+import { fetchRaces, fetchClasses, fetchBackgrounds } from "../../api";
+import { useFetch } from "../../api/useFetch";
+import { SelectRace } from "./ui/select-race/selectRace";
+import { SelectClass } from "./ui/select-class/selectedClass";
+import { SelectBackground } from "./ui/select-background";
+import { SelectPersonality } from "./ui/select-personality";
+import {
+  SelectAbilities,
+  createAbilityScores,
+  isAbilityScoresValid,
+  type AbilityScores,
+} from "./ui/select-abilities";
+import type { Race, Class, Background } from "../../api";
 
-const steps = ['Выбор расы', 'Выбор класса', 'Выбор происхождения', 'Черты характера', 'Характеристики', 'Мировоззрение'];
+const steps = [
+  "Выбор расы",
+  "Выбор класса",
+  "Выбор происхождения",
+  "Черты характера",
+  "Характеристики",
+  "Мировоззрение",
+];
 
 const CreateCharacter = () => {
   const [activeStep, setActiveStep] = useState(0);
 
   const [selectedRace, setSelectedRace] = useState<Race | null>(null);
   const [selectedClass, setSelectedClass] = useState<Class | null>(null);
-  const [selectedBackground, setSelectedBackground] = useState<Background | null>(null);
-  const [selectedPersonality, setSelectedPersonality] = useState<{ traits: string[]; ideals: string[]; bonds: string[]; flaws: string[] } | null>(null);
+  const [selectedBackground, setSelectedBackground] =
+    useState<Background | null>(null);
+  const [selectedPersonality, setSelectedPersonality] = useState<{
+    traits: string[];
+    ideals: string[];
+    bonds: string[];
+    flaws: string[];
+  } | null>(null);
+  const [abilityScores, setAbilityScores] = useState<AbilityScores | null>(
+    null,
+  );
 
-  const { data: races, loading: racesLoading, error: racesError } = useFetch(fetchRaces);
-  const { data: classes, loading: classesLoading, error: classesError } = useFetch(fetchClasses);
-  const { data: backgrounds, loading: backgroundsLoading, error: backgroundsError } = useFetch(fetchBackgrounds);
+  const {
+    data: races,
+    loading: racesLoading,
+    error: racesError,
+  } = useFetch(fetchRaces);
+  const {
+    data: classes,
+    loading: classesLoading,
+    error: classesError,
+  } = useFetch(fetchClasses);
+  const {
+    data: backgrounds,
+    loading: backgroundsLoading,
+    error: backgroundsError,
+  } = useFetch(fetchBackgrounds);
 
   const handleNext = () => {
     if (activeStep === 0 && !selectedRace) return;
     if (activeStep === 1 && !selectedClass) return;
     if (activeStep === 2 && !selectedBackground) return;
     if (activeStep === 3 && !selectedPersonality) return;
+    if (activeStep === 4 && !isAbilityScoresValid(abilityScores)) return;
     setActiveStep((prev) => prev + 1);
   };
 
@@ -40,12 +82,27 @@ const CreateCharacter = () => {
     if (activeStep === 1) return !!selectedClass;
     if (activeStep === 2) return !!selectedBackground;
     if (activeStep === 3) return !!selectedPersonality;
+    if (activeStep === 4) return isAbilityScoresValid(abilityScores);
     return true;
+  };
+
+  const handleSelectClass = (cls: Class) => {
+    if (selectedClass?._id !== cls._id) {
+      setAbilityScores(createAbilityScores(cls.recommended_stats));
+    }
+    setSelectedClass(cls);
   };
 
   if (racesLoading || classesLoading || backgroundsLoading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "100vh",
+        }}
+      >
         <Typography>Загрузка...</Typography>
       </Box>
     );
@@ -58,12 +115,25 @@ const CreateCharacter = () => {
     return <Typography>Ошибка загрузки классов: {classesError}</Typography>;
   }
   if (backgroundsError) {
-    return <Typography>Ошибка загрузки происхождений: {backgroundsError}</Typography>;
+    return (
+      <Typography>Ошибка загрузки происхождений: {backgroundsError}</Typography>
+    );
   }
 
   return (
-    <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <Box sx={{ position: 'sticky', top: 0, backgroundColor: 'var(--bg)', zIndex: 100, p: 2, borderRadius: 1 }}>
+    <Box
+      sx={{ width: "100%", display: "flex", flexDirection: "column", gap: 2 }}
+    >
+      <Box
+        sx={{
+          position: "sticky",
+          top: 0,
+          backgroundColor: "var(--bg)",
+          zIndex: 100,
+          p: 2,
+          borderRadius: 1,
+        }}
+      >
         <Stepper activeStep={activeStep} alternativeLabel sx={{ gap: 1 }}>
           {steps.map((label) => (
             <Step key={label}>
@@ -85,7 +155,7 @@ const CreateCharacter = () => {
           <SelectClass
             classes={classes || []}
             selectedClass={selectedClass}
-            onSelectClass={setSelectedClass}
+            onSelectClass={handleSelectClass}
           />
         )}
         {activeStep === 2 && (
@@ -101,16 +171,25 @@ const CreateCharacter = () => {
             onConfirm={setSelectedPersonality}
           />
         )}
-        {activeStep === 4 && (
-          <Typography>Шаг 5: Определение характеристик (в разработке)</Typography>
+        {activeStep === 4 && selectedClass && selectedRace && abilityScores && (
+          <SelectAbilities
+            selectedClass={selectedClass}
+            selectedRace={selectedRace}
+            scores={abilityScores}
+            onChange={setAbilityScores}
+          />
         )}
         {activeStep === 5 && (
           <Typography>Шаг 6: Выбор мировоззрения (в разработке)</Typography>
         )}
       </Box>
 
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', p: 2 }}>
-        <Button variant="outlined" onClick={handleBack} disabled={activeStep === 0}>
+      <Box sx={{ display: "flex", justifyContent: "space-between", p: 2 }}>
+        <Button
+          variant="outlined"
+          onClick={handleBack}
+          disabled={activeStep === 0}
+        >
           Назад
         </Button>
         <Button
@@ -119,7 +198,7 @@ const CreateCharacter = () => {
           onClick={handleNext}
           disabled={!isStepValid() || activeStep === steps.length - 1}
         >
-          {activeStep === steps.length - 1 ? 'Завершить' : 'Далее'}
+          {activeStep === steps.length - 1 ? "Завершить" : "Далее"}
         </Button>
       </Box>
     </Box>

@@ -108,6 +108,10 @@ export interface OptionalFeature {
   description: string;
 }
 
+export type AbilityKey = 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha';
+
+export type RecommendedStats = Record<AbilityKey, number>;
+
 export interface Class {
   _id: string;
   name: string;
@@ -122,6 +126,7 @@ export interface Class {
   optional_features: OptionalFeature[]; // обязательно
   fixed_equipment: EquipmentItem[];      // обязательно
   choices: EquipmentChoice[];            // обязательно
+  recommended_stats?: RecommendedStats;
 }
 
 export const fetchClasses = (): Promise<Class[]> => get<Class[]>('/classes');
