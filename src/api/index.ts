@@ -3,6 +3,7 @@ export * from './classes';
 export * from './races';
 export * from './spells';
 export * from './skills';
+export * from './backgrounds';
 export * from './weapons';
 export * from './armors';
 export * from './items';

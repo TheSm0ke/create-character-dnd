@@ -1,205 +1,128 @@
 // src/pages/create-character/createCharacter.tsx
-import { useState, useCallback, useRef, useEffect } from 'react';
-import { Box, Button, Fade, IconButton, Typography, Stepper, Step, StepLabel, CircularProgress } from '@mui/material';
+import { Box, Typography, Button, Step, StepLabel, Stepper } from '@mui/material';
+import { useState } from 'react';
+import { fetchRaces, fetchClasses, fetchBackgrounds } from '../../api';
+import { useFetch } from '../../api/useFetch';
 import { SelectRace } from './ui/select-race/selectRace';
 import { SelectClass } from './ui/select-class/selectedClass';
-import { ClassConfiguration } from './ui/select-class/class-configuration/ClassConfiguration';
-import { useFetch } from '../../api/useFetch';
-import { fetchClasses, fetchRaces } from '../../api';
-import type { Race, Class } from '../../api';
-import style from './create-character.module.scss';
-import theme from '../../theme';
-import { ArrowDownIcon } from './arrow-down-icon';
+import { SelectBackground } from './ui/select-background';
+import { SelectPersonality } from './ui/select-personality';
+import type { Race, Class, Background } from '../../api';
 
-const steps = [
-  "Выбор расы",
-  "Выбор класса",
-  "Настройка класса",
-  "Определите происхождение",
-  "Определите значения характеристик",
-  "Выбор мировоззрение",
-];
+const steps = ['Выбор расы', 'Выбор класса', 'Выбор происхождения', 'Черты характера', 'Характеристики', 'Мировоззрение'];
 
 const CreateCharacter = () => {
   const [activeStep, setActiveStep] = useState(0);
-  const [skipped, setSkipped] = useState(new Set<number>());
 
   const [selectedRace, setSelectedRace] = useState<Race | null>(null);
   const [selectedClass, setSelectedClass] = useState<Class | null>(null);
-  const [classConfig, setClassConfig] = useState<{ skills: string[]; equipment: string[][] } | null>(null);
-
-  console.log(classConfig);
+  const [selectedBackground, setSelectedBackground] = useState<Background | null>(null);
+  const [selectedPersonality, setSelectedPersonality] = useState<{ traits: string[]; ideals: string[]; bonds: string[]; flaws: string[] } | null>(null);
 
   const { data: races, loading: racesLoading, error: racesError } = useFetch(fetchRaces);
   const { data: classes, loading: classesLoading, error: classesError } = useFetch(fetchClasses);
-
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const scrollToBottom = () => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  };
-
-  const isStepOptional = useCallback((step: number) => {
-    return step === 1;
-  }, []);
-
-  const isStepSkipped = (step: number) => {
-    return skipped.has(step);
-  };
+  const { data: backgrounds, loading: backgroundsLoading, error: backgroundsError } = useFetch(fetchBackgrounds);
 
   const handleNext = () => {
     if (activeStep === 0 && !selectedRace) return;
     if (activeStep === 1 && !selectedClass) return;
-
-    let newSkipped = skipped;
-    if (isStepSkipped(activeStep)) {
-      newSkipped = new Set(newSkipped.values());
-      newSkipped.delete(activeStep);
-    }
-
-    setActiveStep((prevActiveStep) => prevActiveStep + 1);
-    setSkipped(newSkipped);
-  };
-
-  const handleBack = () => {
-    setActiveStep((prevActiveStep) => prevActiveStep - 1);
-  };
-
-  const handleClassConfirm = (config: { skills: string[]; equipment: string[][] }) => {
-    setClassConfig(config);
+    if (activeStep === 2 && !selectedBackground) return;
+    if (activeStep === 3 && !selectedPersonality) return;
     setActiveStep((prev) => prev + 1);
   };
 
-  const previousActiveStepRef = useRef(activeStep);
-  const resetButtonRef = useRef<HTMLButtonElement>(null);
-  const nextButtonRef = useRef<HTMLButtonElement>(null);
+  const handleBack = () => {
+    setActiveStep((prev) => prev - 1);
+  };
 
-  useEffect(() => {
-    const previousActiveStep = previousActiveStepRef.current;
-    previousActiveStepRef.current = activeStep;
+  const isStepValid = () => {
+    if (activeStep === 0) return !!selectedRace;
+    if (activeStep === 1) return !!selectedClass;
+    if (activeStep === 2) return !!selectedBackground;
+    if (activeStep === 3) return !!selectedPersonality;
+    return true;
+  };
 
-    if (activeStep === steps.length) {
-      resetButtonRef.current?.focus();
-      return;
-    }
-    if (activeStep === 0 && previousActiveStep === steps.length) {
-      nextButtonRef.current?.focus();
-      return;
-    }
-    if (isStepOptional(previousActiveStep) && !isStepOptional(activeStep)) {
-      nextButtonRef.current?.focus();
-    }
-  }, [activeStep, isStepOptional]);
-
-  // Показываем спиннер, пока загружаются расы или классы
-  if (racesLoading || classesLoading) {
+  if (racesLoading || classesLoading || backgroundsLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <CircularProgress sx={{ color: theme.palette.primary.main }} />
+        <Typography>Загрузка...</Typography>
       </Box>
     );
   }
 
-  // Если ошибка загрузки – показываем сообщение
-  if (racesError || classesError) {
-    return (
-      <Box sx={{ p: 2 }}>
-        <Typography color="error">
-          Ошибка загрузки: {racesError || classesError}
-        </Typography>
-      </Box>
-    );
+  if (racesError) {
+    return <Typography>Ошибка загрузки рас: {racesError}</Typography>;
+  }
+  if (classesError) {
+    return <Typography>Ошибка загрузки классов: {classesError}</Typography>;
+  }
+  if (backgroundsError) {
+    return <Typography>Ошибка загрузки происхождений: {backgroundsError}</Typography>;
   }
 
   return (
-    <div className={style.main}>
-      <Box style={{ position: 'sticky', top: 0, backgroundColor: 'var(--bg)', zIndex: 100, padding: 16, borderRadius: 8 }}>
-        <Stepper activeStep={activeStep} sx={{ flexWrap: 'wrap', gap: 0.5 }}>
-          {steps.map((label, index) => {
-            const stepProps: { completed?: boolean } = {};
-            const labelProps: { optional?: React.ReactNode } = {};
-            if (isStepSkipped(index)) {
-              stepProps.completed = false;
-            }
-            return (
-              <Step key={label} {...stepProps}>
-                <StepLabel {...labelProps}>{label}</StepLabel>
-              </Step>
-            );
-          })}
+    <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <Box sx={{ position: 'sticky', top: 0, backgroundColor: 'var(--bg)', zIndex: 100, p: 2, borderRadius: 1 }}>
+        <Stepper activeStep={activeStep} alternativeLabel sx={{ gap: 1 }}>
+          {steps.map((label) => (
+            <Step key={label}>
+              <StepLabel>{label}</StepLabel>
+            </Step>
+          ))}
         </Stepper>
       </Box>
 
-      {activeStep === 0 && (
-        <SelectRace
-          races={races || []}
-          selectedRace={selectedRace}
-          onSelectRace={setSelectedRace}
-        />
-      )}
-      {activeStep === 1 && (
-        <SelectClass
-          classes={classes || []}
-          selectedClass={selectedClass}
-          onSelectClass={setSelectedClass}
-        />
-      )}
-      {activeStep === 2 && selectedClass && (
-        <ClassConfiguration
-          classData={selectedClass}
-          onConfirm={handleClassConfirm}
-          onBack={handleBack}
-        />
-      )}
-      {activeStep === 3 && <Box sx={{ p: 2 }}>Происхождение (скоро будет)</Box>}
-      {activeStep === 4 && <Box sx={{ p: 2 }}>Характеристики (скоро будет)</Box>}
-      {activeStep === 5 && <Box sx={{ p: 2 }}>Мировоззрение (скоро будет)</Box>}
+      <Box sx={{ p: 2 }}>
+        {activeStep === 0 && (
+          <SelectRace
+            races={races || []}
+            selectedRace={selectedRace}
+            onSelectRace={setSelectedRace}
+          />
+        )}
+        {activeStep === 1 && (
+          <SelectClass
+            classes={classes || []}
+            selectedClass={selectedClass}
+            onSelectClass={setSelectedClass}
+          />
+        )}
+        {activeStep === 2 && (
+          <SelectBackground
+            backgrounds={backgrounds || []}
+            selectedBackground={selectedBackground}
+            onSelectBackground={setSelectedBackground}
+          />
+        )}
+        {activeStep === 3 && selectedBackground && (
+          <SelectPersonality
+            personality={selectedBackground.suggested_personality}
+            onConfirm={setSelectedPersonality}
+          />
+        )}
+        {activeStep === 4 && (
+          <Typography>Шаг 5: Определение характеристик (в разработке)</Typography>
+        )}
+        {activeStep === 5 && (
+          <Typography>Шаг 6: Выбор мировоззрения (в разработке)</Typography>
+        )}
+      </Box>
 
-      {activeStep !== 2 && (
-        <Box style={{ position: 'sticky', bottom: 0, backgroundColor: 'var(--bg)', padding: 8 }}>
-          <Typography sx={{ mt: 2, mb: 1 }}>Шаг {activeStep + 1}</Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'row', pt: 2 }}>
-            <Button
-              color="inherit"
-              disabled={activeStep === 0}
-              onClick={handleBack}
-              sx={{ mr: 1 }}
-            >
-              Назад
-            </Button>
-            <Box sx={{ flex: '1 1 auto' }} />
-            <Button
-              ref={nextButtonRef}
-              onClick={handleNext}
-              disabled={activeStep === 0 && !selectedRace || activeStep === 1 && !selectedClass}
-            >
-              {activeStep === steps.length - 1 ? 'Создать' : 'Дальше'}
-            </Button>
-          </Box>
-        </Box>
-      )}
-
-      <div ref={bottomRef} />
-
-      <Fade in={true} timeout={400}>
-        <IconButton
-          onClick={scrollToBottom}
-          sx={{
-            position: 'fixed',
-            bottom: 60,
-            right: 45,
-            backgroundColor: theme.palette.primary.main,
-            color: '#fff',
-            '&:hover': {
-              backgroundColor: theme.palette.primary.dark,
-            },
-            zIndex: 1000,
-            boxShadow: theme.shadows[4],
-          }}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', p: 2 }}>
+        <Button variant="outlined" onClick={handleBack} disabled={activeStep === 0}>
+          Назад
+        </Button>
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={handleNext}
+          disabled={!isStepValid() || activeStep === steps.length - 1}
         >
-          <ArrowDownIcon />
-        </IconButton>
-      </Fade>
-    </div>
+          {activeStep === steps.length - 1 ? 'Завершить' : 'Далее'}
+        </Button>
+      </Box>
+    </Box>
   );
 };
 
