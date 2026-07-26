@@ -387,16 +387,25 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
     setSelectedEquipment(prev => {
       const current = prev[choiceIndex];
       if (!current) return prev;
-      const ids = current.specificItemIds || [];
+      const ids = [...(current.specificItemIds || [])];
       const key = `${choiceIndex}-${current.optionIndex}`;
       const data = loadedItems[key];
-      const maxSelect = data?.isMultiSelect ? (data.maxSelect || 1) : 1;
 
-      if (ids.includes(itemId)) {
-        return { ...prev, [choiceIndex]: { ...current, specificItemIds: ids.filter(id => id !== itemId) } };
+      if (data?.isMultiSelect) {
+        const maxSelect = data.maxSelect || 1;
+        // Всегда добавляем, если не превышен лимит. Удаление – только через чипсы.
+        if (ids.length < maxSelect) {
+          ids.push(itemId);
+        }
+      } else {
+        // Обычный toggle (одиночный выбор)
+        if (ids.includes(itemId)) {
+          return { ...prev, [choiceIndex]: { ...current, specificItemIds: ids.filter(id => id !== itemId) } };
+        }
+        if (ids.length >= 1) return prev;
+        ids.push(itemId);
       }
-      if (ids.length >= maxSelect) return prev;
-      return { ...prev, [choiceIndex]: { ...current, specificItemIds: [...ids, itemId] } };
+      return { ...prev, [choiceIndex]: { ...current, specificItemIds: ids } };
     });
   }, [loadedItems]);
 
@@ -404,7 +413,12 @@ export const ClassConfiguration = ({ classData, onConfirm, onBack }: ClassConfig
     setSelectedEquipment(prev => {
       const current = prev[choiceIndex];
       if (!current) return prev;
-      return { ...prev, [choiceIndex]: { ...current, specificItemIds: current.specificItemIds.filter(id => id !== itemId) } };
+      const ids = current.specificItemIds || [];
+      const index = ids.indexOf(itemId);
+      if (index === -1) return prev;
+      const newIds = [...ids];
+      newIds.splice(index, 1);
+      return { ...prev, [choiceIndex]: { ...current, specificItemIds: newIds } };
     });
   }, []);
 

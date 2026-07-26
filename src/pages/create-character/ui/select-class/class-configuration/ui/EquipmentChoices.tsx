@@ -102,7 +102,6 @@ export const EquipmentChoices: React.FC<EquipmentChoicesProps> = ({
                   <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>Загрузка...</Typography>
                 ) : (
                   (() => {
-                    // Опция со щитом
                     if (isShieldOption) {
                       const shieldItem = loadedData?.shieldItem;
                       return (
@@ -143,7 +142,6 @@ export const EquipmentChoices: React.FC<EquipmentChoicesProps> = ({
                       );
                     }
 
-                    // Множественный выбор одинаковых предметов (×2, ×3)
                     if (isMultiSelect) {
                       const validItems = items.filter((item: any) => item != null);
                       if (validItems.length === 0) {
@@ -162,10 +160,25 @@ export const EquipmentChoices: React.FC<EquipmentChoicesProps> = ({
                             startAdornment={<InputAdornment position="start">{searchIcon}</InputAdornment>}
                             sx={{ mt: 1, width: '100%' }}
                           />
+                          {selectedIds.length > 0 && (
+                            <Box sx={{ mt: 1 }}>
+                              <Typography variant="caption">Выбрано ({selectedIds.length}/{maxSelect}):</Typography>
+                              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 0.5, justifyContent: 'center' }}>
+                                {selectedIds.map((id: string, i: number) => {
+                                  const item = items.find((i: any) => i._id === id);
+                                  return item ? (
+                                    <Chip key={`${id}-${i}`} label={item.name} onDelete={() => handleRemoveSpecificItem(idx, id)} sx={{ color: 'white' }} />
+                                  ) : null;
+                                })}
+                              </Box>
+                            </Box>
+                          )}
                           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 1, mt: 1 }}>
                             {filterItems(idx).filter((item: any) => item != null).map((item: any, itemIdx: number) => {
                               const type = getItemType(item);
-                              const isSelected = selectedIds.includes(item._id);
+                              const cnt = selectedIds.filter(id => id === item._id).length;
+                              const isSelected = cnt > 0;
+                              const suffix = cnt > 1 ? `(${cnt})` : undefined;
                               return (
                                 <EquipmentItemCard
                                   key={itemIdx}
@@ -173,34 +186,20 @@ export const EquipmentChoices: React.FC<EquipmentChoicesProps> = ({
                                   type={type}
                                   selected={isSelected}
                                   onSelect={() => handleSpecificItemSelect(idx, item._id)}
+                                  suffix={suffix}
                                 />
                               );
                             })}
                           </Box>
-                          {selectedIds.length > 0 && (
-                            <Box sx={{ mt: 1 }}>
-                              <Typography variant="caption">Выбрано ({selectedIds.length}/{maxSelect}):</Typography>
-                              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 0.5 }}>
-                                {selectedIds.map((id: string) => {
-                                  const item = items.find((i: any) => i._id === id);
-                                  return item ? (
-                                    <Chip key={id} label={item.name} onDelete={() => handleRemoveSpecificItem(idx, id)} sx={{ color: 'white' }} />
-                                  ) : null;
-                                })}
-                              </Box>
-                            </Box>
-                          )}
                         </Box>
                       );
                     }
 
-                    // Обычные варианты
                     const validItems = items.filter((item: any) => item != null);
                     if (validItems.length === 0) {
                       return <Typography variant="caption">Предметы не найдены</Typography>;
                     }
 
-                    // Если это набор (pack) – показываем как неизменяемый список
                     if (loadedData?.isPack) {
                       return (
                         <Box sx={{ mt: 1 }}>
@@ -226,7 +225,6 @@ export const EquipmentChoices: React.FC<EquipmentChoicesProps> = ({
                       );
                     }
 
-                    // Если несколько предметов (разных) – даём возможность выбрать один
                     if (validItems.length > 1) {
                       return (
                         <Box sx={{ mt: 2, p: 2, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 2 }}>
@@ -260,7 +258,6 @@ export const EquipmentChoices: React.FC<EquipmentChoicesProps> = ({
                       );
                     }
 
-                    // Ровно один предмет – просто показываем как выбранный
                     const selectedItem = validItems[0];
                     const type = getItemType(selectedItem);
                     return (

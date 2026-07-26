@@ -6,11 +6,12 @@ import { damageIcons } from './constants';
 
 interface EquipmentItemCardProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  item: Weapon | Armor | Item | Tool | any; // добавили any для поддержки ручных предметов
+  item: Weapon | Armor | Item | Tool | any;
   type: EquipmentType;
   selected: boolean;
   onSelect: () => void;
   disabled?: boolean;
+  suffix?: string;   // <-- добавлено
 }
 
 export const EquipmentItemCard = memo(({
@@ -19,8 +20,8 @@ export const EquipmentItemCard = memo(({
   selected,
   onSelect,
   disabled = false,
+  suffix,
 }: EquipmentItemCardProps) => {
-  console.log('type', type)
   const theme = useTheme();
 
   const handleClick = () => {
@@ -38,9 +39,7 @@ export const EquipmentItemCard = memo(({
   const damageIcon = normalizedDamageType ? damageIcons[normalizedDamageType] : null;
 
   const renderDetails = () => {
-    // Если есть поля cost, weight, detail, count — показываем их (для ручных предметов из набора)
     const hasManualFields = 'cost' in item || 'weight' in item || 'detail' in item || (item.count && item.count > 1);
-
     if (hasManualFields && (type === 'item' || type === 'pack')) {
       return (
         <Box sx={{ mt: 0.5 }}>
@@ -63,7 +62,6 @@ export const EquipmentItemCard = memo(({
       );
     }
 
-    // Стандартные типы из API
     switch (type) {
       case 'weapon': {
         const w = item as Weapon;
@@ -98,17 +96,17 @@ export const EquipmentItemCard = memo(({
           <>
             {a.class && (
               <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
-                Тип: {item.class}
+                Тип: {a.class}
               </Typography>
             )}
             {a.classArmor && (
               <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
-                Класс брони: {item.classArmor}
+                Класс брони: {a.classArmor}
               </Typography>
             )}
             {a.needStrong !== undefined && a.needStrong > 0 && (
               <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
-                Требуемая Сила: {item.needStrong}
+                Требуемая Сила: {a.needStrong}
               </Typography>
             )}
             {a.Secrecy !== undefined && (
@@ -117,7 +115,7 @@ export const EquipmentItemCard = memo(({
               </Typography>
             )}
           </>
-        )
+        );
       }
       case 'tool': {
         const t = item as Tool;
@@ -148,8 +146,6 @@ export const EquipmentItemCard = memo(({
       }
       case 'item': {
         const i = item as Item;
-        // Для обычных предметов из API (у них нет cost, weight в интерфейсе)
-        // Но могут быть description, damage_dice и т.д.
         return (
           <Box sx={{ mt: 0.5 }}>
             {i.category && (
@@ -219,6 +215,7 @@ export const EquipmentItemCard = memo(({
         )}
         <Typography variant="body2" sx={{ color: theme.palette.common.white, fontWeight: 500, flex: 1 }}>
           {item.name}
+          {suffix && <span style={{ marginLeft: 4, opacity: 0.7 }}>{suffix}</span>}
         </Typography>
         {damageIcon && (
           <img
