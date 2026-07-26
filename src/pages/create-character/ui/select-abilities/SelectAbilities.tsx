@@ -11,7 +11,7 @@ import {
   useTheme,
 } from "@mui/material";
 import { useMemo, useState, type DragEvent } from "react";
-import type { AbilityKey, Class, Race } from "../../../../api";
+import type { AbilityKey, Background, Class, Race } from "../../../../api";
 import {
   STANDARD_ARRAY,
   createAbilityScores,
@@ -117,6 +117,7 @@ const formatModifier = (value: number) => {
 interface SelectAbilitiesProps {
   selectedClass: Class;
   selectedRace: Race;
+  selectedBackground: Background;
   scores: AbilityScores;
   selectedSkills: string[];
   onChange: (scores: AbilityScores) => void;
@@ -126,6 +127,7 @@ interface SelectAbilitiesProps {
 export const SelectAbilities = ({
   selectedClass,
   selectedRace,
+  selectedBackground,
   scores,
   selectedSkills,
   onChange,
@@ -460,6 +462,7 @@ export const SelectAbilities = ({
       <SelectSkills
         selectedClass={selectedClass}
         selectedRace={selectedRace}
+        selectedBackground={selectedBackground}
         scores={Object.fromEntries(
           ABILITIES.map(({ key }) => [key, scores[key] + raceBonuses[key]]),
         ) as AbilityScores}

@@ -1,8 +1,11 @@
 import {
+  Alert,
   Box,
+  Button,
   Card,
   CardContent,
   Chip,
+  CircularProgress,
   Divider,
   List,
   ListItem,
@@ -13,16 +16,18 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useState, type ReactNode } from 'react';
 import {
   fetchArmors,
   fetchSkills,
   fetchWeapons,
+  createCharacter,
   searchEquipment,
   type Alignment,
   type Armor,
   type Background,
   type Class,
+  type CreateCharacterPayload,
   type Race,
   type Spell,
   type Weapon,
@@ -47,11 +52,16 @@ interface CharacterSheetProps {
   personality: Personality;
   abilityScores: AbilityScores;
   selectedSkills: string[];
+  selectedBackgroundLanguages: string[];
   classConfiguration: ClassConfiguration;
   characterName: string;
   currentHitPoints: number | null;
   onCharacterNameChange: (name: string) => void;
   onCurrentHitPointsChange: (hitPoints: number | null) => void;
+}
+
+export interface CharacterSheetHandle {
+  createCharacter: () => Promise<void>;
 }
 
 const ABILITIES: Array<{ key: AbilityKey; name: string; abbreviation: string }> = [
@@ -265,7 +275,7 @@ const getInventoryEntryFromSearchItem = (
   };
 };
 
-export const CharacterSheet = ({
+export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetProps>(({
   race,
   characterClass,
   background,
@@ -273,13 +283,17 @@ export const CharacterSheet = ({
   personality,
   abilityScores,
   selectedSkills,
+  selectedBackgroundLanguages,
   classConfiguration,
   characterName,
   currentHitPoints,
   onCharacterNameChange,
   onCurrentHitPointsChange,
-}: CharacterSheetProps) => {
+}, ref) => {
   const [tab, setTab] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [savedCharacterId, setSavedCharacterId] = useState<string | null>(null);
   const { data: skillsData, loading: skillsLoading } = useFetch(fetchSkills);
   const { data: weaponsData } = useFetch(fetchWeapons);
   const { data: armorsData } = useFetch(fetchArmors);
@@ -364,7 +378,7 @@ export const CharacterSheet = ({
     };
   }, [inventorySources]);
 
-  const inventoryEntries = resolvedInventoryEntries ?? inventorySources.map((source) => ({
+  const inventoryEntries: InventoryEntry[] = resolvedInventoryEntries ?? inventorySources.map((source): InventoryEntry => ({
     ...source,
     type: 'Снаряжение',
     details: 'Загрузка подробностей предмета…',
@@ -398,6 +412,59 @@ export const CharacterSheet = ({
   const firstLevelSlots = characterClass.spellcasting?.spell_slots_progression?.find(
     ({ level }) => level === 1,
   )?.slots;
+
+  const handleCreateCharacter = async () => {
+    if (saving || !characterName.trim()) return;
+
+    const payload: CreateCharacterPayload = {
+      name: characterName.trim(),
+      level: 1,
+      hit_points: {
+        current: currentHitPoints ?? hitPoints,
+        maximum: hitPoints,
+      },
+      race_id: race._id,
+      class_id: characterClass._id,
+      subclass_id: classConfiguration.subclass,
+      background_id: background._id,
+      alignment_id: alignment._id,
+      ability_scores: {
+        base: abilityScores,
+        total: totalScores,
+      },
+      skills: {
+        selected: selectedSkills,
+        granted_by_race: race.skill_proficiencies ?? [],
+        granted_by_background: background.skill_proficiencies,
+      },
+      background_language_choices: selectedBackgroundLanguages,
+      personality,
+      inventory: {
+        fixed_equipment: characterClass.fixed_equipment,
+        selected_equipment: classConfiguration.equipment,
+        instruments: classConfiguration.instruments ?? [],
+      },
+      spells: {
+        cantrip_ids: classConfiguration.cantrips.map((spell) => spell._id),
+        spell_ids: classConfiguration.spells1.map((spell) => spell._id),
+      },
+    };
+
+    setSaving(true);
+    setSaveError(null);
+    setSavedCharacterId(null);
+
+    try {
+      const createdCharacter = await createCharacter(payload);
+      setSavedCharacterId(createdCharacter._id);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Не удалось создать персонажа.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  useImperativeHandle(ref, () => ({ createCharacter: handleCreateCharacter }));
 
   const basicTab = (
     <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, minmax(0, 1fr))' }, gap: 2 }}>
@@ -731,6 +798,28 @@ export const CharacterSheet = ({
             fullWidth
           />
         </Box>
+        <Box sx={{ display: 'none' }} aria-hidden>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleCreateCharacter}
+            disabled={saving || !characterName.trim()}
+            startIcon={saving ? <CircularProgress size={16} color="inherit" /> : undefined}
+          >
+            {saving ? 'Сохранение…' : 'Создать персонажа'}
+          </Button>
+        </Box>
+        {!characterName.trim() && (
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+            Укажите имя, чтобы создать персонажа.
+          </Typography>
+        )}
+        {saveError && <Alert severity="error" sx={{ mt: 2 }}>{saveError}</Alert>}
+        {savedCharacterId && (
+          <Alert severity="success" sx={{ mt: 2 }}>
+            Персонаж создан. Идентификатор: {savedCharacterId}
+          </Alert>
+        )}
       </Paper>
       <Paper variant="outlined" sx={{ mb: 2 }}>
         <Tabs value={tab} onChange={(_, value) => setTab(value)} variant="scrollable" allowScrollButtonsMobile>
@@ -743,4 +832,4 @@ export const CharacterSheet = ({
       <Box role="tabpanel">{tabPanels[tab]}</Box>
     </Box>
   );
-};
+});

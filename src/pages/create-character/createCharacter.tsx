@@ -7,8 +7,8 @@ import {
   StepLabel,
   Stepper,
 } from "@mui/material";
-import { useState } from "react";
-import { fetchRaces, fetchClasses, fetchBackgrounds, fetchAlignments } from "../../api";
+import { useRef, useState } from "react";
+import { fetchRaces, fetchClasses, fetchBackgrounds, fetchAlignments, fetchLanguages } from "../../api";
 import { useFetch } from "../../api/useFetch";
 import { SelectRace } from "./ui/select-race/selectRace";
 import {
@@ -18,7 +18,7 @@ import {
 import { SelectBackground } from "./ui/select-background";
 import { SelectPersonality } from "./ui/select-personality";
 import { SelectAlignment } from "./ui/select-alignment";
-import { CharacterSheet } from "./ui/character-sheet";
+import { CharacterSheet, type CharacterSheetHandle } from "./ui/character-sheet";
 import {
   SelectAbilities,
   createAbilityScores,
@@ -26,7 +26,8 @@ import {
   isSkillSelectionValid,
   type AbilityScores,
 } from "./ui/select-abilities";
-import type { Race, Class, Background, Alignment } from "../../api";
+import type { Race, Class, Background, Alignment, Language } from "../../api";
+import { getBackgroundLanguageChoiceCount } from "./ui/select-background/languageChoices";
 
 const steps = [
   "Выбор расы",
@@ -40,11 +41,13 @@ const steps = [
 
 const CreateCharacter = () => {
   const [activeStep, setActiveStep] = useState(0);
+  const characterSheetRef = useRef<CharacterSheetHandle>(null);
 
   const [selectedRace, setSelectedRace] = useState<Race | null>(null);
   const [selectedClass, setSelectedClass] = useState<Class | null>(null);
   const [selectedBackground, setSelectedBackground] =
     useState<Background | null>(null);
+  const [selectedBackgroundLanguages, setSelectedBackgroundLanguages] = useState<string[]>([]);
   const [selectedAlignment, setSelectedAlignment] = useState<Alignment | null>(null);
   const [characterName, setCharacterName] = useState("");
   const [currentHitPoints, setCurrentHitPoints] = useState<number | null>(null);
@@ -81,11 +84,20 @@ const CreateCharacter = () => {
     loading: alignmentsLoading,
     error: alignmentsError,
   } = useFetch(fetchAlignments);
+  const {
+    data: languages,
+    loading: languagesLoading,
+    error: languagesError,
+  } = useFetch(fetchLanguages);
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (activeStep === 0 && !selectedRace) return;
     if (activeStep === 1 && (!selectedClass || !classConfiguration)) return;
-    if (activeStep === 2 && !selectedBackground) return;
+    if (
+      activeStep === 2
+      && (!selectedBackground
+        || selectedBackgroundLanguages.length !== getBackgroundLanguageChoiceCount(selectedBackground.languages))
+    ) return;
     if (activeStep === 3 && !selectedPersonality) return;
     if (
       activeStep === 4 &&
@@ -95,6 +107,11 @@ const CreateCharacter = () => {
       return;
     }
     if (activeStep === 5 && !selectedAlignment) return;
+    if (activeStep === steps.length - 1) {
+      await characterSheetRef.current?.createCharacter();
+      return;
+    }
+
     setActiveStep((prev) => prev + 1);
   };
 
@@ -105,7 +122,10 @@ const CreateCharacter = () => {
   const isStepValid = () => {
     if (activeStep === 0) return !!selectedRace;
     if (activeStep === 1) return !!selectedClass && !!classConfiguration;
-    if (activeStep === 2) return !!selectedBackground;
+    if (activeStep === 2) {
+      return !!selectedBackground
+        && selectedBackgroundLanguages.length === getBackgroundLanguageChoiceCount(selectedBackground.languages);
+    }
     if (activeStep === 3) return !!selectedPersonality;
     if (activeStep === 4) {
       return (
@@ -114,6 +134,7 @@ const CreateCharacter = () => {
       );
     }
     if (activeStep === 5) return !!selectedAlignment;
+    if (activeStep === steps.length - 1) return !!characterName.trim();
     return true;
   };
 
@@ -140,7 +161,14 @@ const CreateCharacter = () => {
     setSelectedRace(race);
   };
 
-  if (racesLoading || classesLoading || backgroundsLoading || alignmentsLoading) {
+  const handleSelectBackground = (background: Background) => {
+    if (selectedBackground?._id !== background._id) {
+      setSelectedBackgroundLanguages([]);
+    }
+    setSelectedBackground(background);
+  };
+
+  if (racesLoading || classesLoading || backgroundsLoading || alignmentsLoading || languagesLoading) {
     return (
       <Box
         sx={{
@@ -168,6 +196,9 @@ const CreateCharacter = () => {
   }
   if (alignmentsError) {
     return <Typography>Ошибка загрузки мировоззрений: {alignmentsError}</Typography>;
+  }
+  if (languagesError) {
+    return <Typography>Ошибка загрузки языков: {languagesError}</Typography>;
   }
 
   return (
@@ -212,8 +243,11 @@ const CreateCharacter = () => {
         {activeStep === 2 && (
           <SelectBackground
             backgrounds={backgrounds || []}
+            languages={(languages ?? []) as Language[]}
             selectedBackground={selectedBackground}
-            onSelectBackground={setSelectedBackground}
+            selectedBackgroundLanguages={selectedBackgroundLanguages}
+            onSelectBackground={handleSelectBackground}
+            onSelectedBackgroundLanguagesChange={setSelectedBackgroundLanguages}
           />
         )}
         {activeStep === 3 && selectedBackground && (
@@ -222,10 +256,11 @@ const CreateCharacter = () => {
             onConfirm={setSelectedPersonality}
           />
         )}
-        {activeStep === 4 && selectedClass && selectedRace && abilityScores && (
+        {activeStep === 4 && selectedClass && selectedRace && selectedBackground && abilityScores && (
           <SelectAbilities
             selectedClass={selectedClass}
             selectedRace={selectedRace}
+            selectedBackground={selectedBackground}
             scores={abilityScores}
             selectedSkills={selectedSkills}
             onChange={setAbilityScores}
@@ -248,6 +283,7 @@ const CreateCharacter = () => {
           abilityScores &&
           classConfiguration && (
             <CharacterSheet
+              ref={characterSheetRef}
               race={selectedRace}
               characterClass={selectedClass}
               background={selectedBackground}
@@ -256,6 +292,7 @@ const CreateCharacter = () => {
               abilityScores={abilityScores}
               selectedSkills={selectedSkills}
               classConfiguration={classConfiguration}
+              selectedBackgroundLanguages={selectedBackgroundLanguages}
               characterName={characterName}
               currentHitPoints={currentHitPoints}
               onCharacterNameChange={setCharacterName}
@@ -276,7 +313,7 @@ const CreateCharacter = () => {
           variant="contained"
           color="primary"
           onClick={handleNext}
-          disabled={!isStepValid() || activeStep === steps.length - 1}
+          disabled={!isStepValid()}
         >
           {activeStep === steps.length - 1 ? "Завершить" : "Далее"}
         </Button>

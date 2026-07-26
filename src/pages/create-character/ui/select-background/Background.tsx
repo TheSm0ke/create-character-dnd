@@ -1,5 +1,12 @@
-import { Typography, Box, useTheme } from '@mui/material';
-import { useState } from 'react';
+import {
+  Box,
+  ButtonBase,
+  Card,
+  CardContent,
+  Chip,
+  Divider,
+  Typography,
+} from '@mui/material';
 
 interface BackgroundProps {
   _id: string;
@@ -8,10 +15,38 @@ interface BackgroundProps {
   skill_proficiencies: string[];
   tool_proficiencies: string[];
   languages: string[];
-  feature: { name: string; description: string };
+  spells?: { name: string; level: string; source: string }[];
+  feature?: { name: string; description: string };
   selected?: boolean;
   onSelect?: () => void;
 }
+
+const ProficiencyChips = ({
+  label,
+  values,
+  color = 'default',
+}: {
+  label: string;
+  values: string[];
+  color?: 'default' | 'primary' | 'secondary';
+}) => (
+  <Box sx={{ mt: 1.5 }}>
+    <Typography variant="subtitle2" sx={{ mb: 0.75 }}>
+      {label}
+    </Typography>
+    {values.length > 0 ? (
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+        {values.map((value) => (
+          <Chip key={value} label={value} color={color} size="small" variant="outlined" />
+        ))}
+      </Box>
+    ) : (
+      <Typography variant="body2" color="text.secondary">
+        Не предоставляется.
+      </Typography>
+    )}
+  </Box>
+);
 
 export const Background = ({
   name,
@@ -19,65 +54,73 @@ export const Background = ({
   skill_proficiencies,
   tool_proficiencies,
   languages,
+  spells = [],
   feature,
   selected = false,
   onSelect,
-}: BackgroundProps) => {
-  const [hover, setHover] = useState(false);
-  const theme = useTheme();
-
-  const handleClick = () => {
-    if (onSelect) onSelect();
-  };
-
-  return (
-    <Box
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      onClick={handleClick}
-      sx={{
-        padding: 2,
-        borderRadius: 2,
-        border: '2px solid',
-        borderColor: selected
-          ? theme.palette.primary.main
-          : hover
-          ? theme.palette.primary.light
-          : 'rgba(255,255,255,0.08)',
-        textAlign: 'left',
-        transition: 'transform 0.25s ease, border-color 0.3s ease, background-color 0.3s ease',
-        transform: selected ? 'scale(1.03)' : hover ? 'scale(1.02)' : 'scale(1)',
-        backgroundColor: selected
-          ? 'rgba(170, 59, 255, 0.12)'
-          : hover
-          ? 'rgba(255,255,255,0.03)'
-          : 'transparent',
-        cursor: 'pointer',
-        boxShadow: selected ? `0 0 20px ${theme.palette.primary.main}40` : 'none',
-      }}
+}: BackgroundProps) => (
+  <Card
+    component="article"
+    variant="outlined"
+    sx={{
+      height: '100%',
+      borderColor: selected ? 'primary.main' : 'divider',
+      backgroundColor: selected ? 'action.selected' : 'background.paper',
+      transition: (theme) => theme.transitions.create(['border-color', 'background-color', 'transform']),
+      transform: selected ? 'scale(1.02)' : 'none',
+      '&:hover': {
+        borderColor: 'primary.light',
+        backgroundColor: 'action.hover',
+      },
+    }}
+  >
+    <ButtonBase
+      onClick={onSelect}
+      aria-pressed={selected}
+      sx={{ display: 'block', width: '100%', height: '100%', textAlign: 'left' }}
     >
-      <Typography variant="h6" sx={{ color: theme.palette.common.white }}>
-        {name}
-      </Typography>
+      <CardContent sx={{ width: '100%' }}>
+        <Typography variant="h6" component="h2">
+          {name}
+        </Typography>
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{
+            mt: 1,
+            maxHeight: 120,
+            overflowY: 'auto',
+            pr: 0.5,
+            whiteSpace: 'pre-line',
+          }}
+        >
+          {description}
+        </Typography>
 
-      <Typography variant="body2" sx={{ color: theme.palette.text.secondary, mt: 1 }}>
-        {description}
-      </Typography>
+        <ProficiencyChips label="Навыки" values={skill_proficiencies} color="primary" />
 
-      <Box sx={{ mt: 1 }}>
-        <Typography variant="caption" sx={{ color: theme.palette.text.secondary, display: 'block' }}>
-          Владение навыками: {skill_proficiencies.join(', ')}
-        </Typography>
-        <Typography variant="caption" sx={{ color: theme.palette.text.secondary, display: 'block' }}>
-          Владение инструментами: {tool_proficiencies.join(', ')}
-        </Typography>
-        <Typography variant="caption" sx={{ color: theme.palette.text.secondary, display: 'block' }}>
-          Языки: {languages.join(', ')}
-        </Typography>
-        <Typography variant="caption" sx={{ color: theme.palette.primary.main, display: 'block', mt: 0.5 }}>
-          Особенность: {feature.name} — {feature.description}
-        </Typography>
-      </Box>
-    </Box>
-  );
-};
+        {feature && (
+          <Box sx={{ mt: 2, p: 1.5, borderRadius: 1, backgroundColor: 'action.selected' }}>
+            <Typography variant="subtitle2" color="secondary.main">
+              Особенность: {feature.name}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              {feature.description}
+            </Typography>
+          </Box>
+        )}
+
+        <Divider sx={{ my: 2 }} />
+        <ProficiencyChips label="Инструменты" values={tool_proficiencies} />
+        <ProficiencyChips label="Языки" values={languages} />
+        {spells.length > 0 && (
+          <ProficiencyChips
+            label="Заклинания"
+            values={spells.map((spell) => `${spell.name} (${spell.level})`)}
+            color="secondary"
+          />
+        )}
+      </CardContent>
+    </ButtonBase>
+  </Card>
+);

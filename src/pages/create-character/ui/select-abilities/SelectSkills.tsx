@@ -9,13 +9,14 @@ import {
   Typography,
 } from "@mui/material";
 import { useEffect, useMemo } from "react";
-import { fetchSkills, type Class, type Race, type Skill } from "../../../../api";
+import { fetchSkills, type Background, type Class, type Race, type Skill } from "../../../../api";
 import { useFetch } from "../../../../api/useFetch";
 import type { AbilityScores } from "./abilityScores";
 
 interface SelectSkillsProps {
   selectedClass: Class;
   selectedRace: Race;
+  selectedBackground: Background;
   scores: AbilityScores;
   selectedSkills: string[];
   onChange: (skills: string[]) => void;
@@ -63,9 +64,12 @@ const getEffectiveScore = (skill: Skill, scores: AbilityScores) => {
   return abilityScores[skill.ability] ?? 0;
 };
 
+const formatModifier = (modifier: number) => (modifier >= 0 ? `+${modifier}` : String(modifier));
+
 export const SelectSkills = ({
   selectedClass,
   selectedRace,
+  selectedBackground,
   scores,
   selectedSkills,
   onChange,
@@ -76,15 +80,22 @@ export const SelectSkills = ({
     () => getRaceSkillNames(selectedRace, allSkills ?? []),
     [allSkills, selectedRace],
   );
+  const backgroundSkills = useMemo(
+    () => selectedBackground.skill_proficiencies,
+    [selectedBackground.skill_proficiencies],
+  );
   const availableSkills = useMemo(
     () =>
       (allSkills ?? [])
-        .filter((skill) => selectedClass.proficiencies.skills.list.includes(skill.name))
-        .filter((skill) => !raceSkills.includes(skill.name))
-        .sort((first, second) =>
-          getEffectiveScore(second, scores) - getEffectiveScore(first, scores),
-        ),
-    [allSkills, raceSkills, scores, selectedClass.proficiencies.skills.list],
+        .sort((first, second) => {
+          const firstGranted = raceSkills.includes(first.name) || backgroundSkills.includes(first.name);
+          const secondGranted = raceSkills.includes(second.name) || backgroundSkills.includes(second.name);
+
+          if (firstGranted !== secondGranted) return firstGranted ? -1 : 1;
+
+          return getEffectiveScore(second, scores) - getEffectiveScore(first, scores);
+        }),
+    [allSkills, backgroundSkills, raceSkills, scores],
   );
   const availableSkillNames = useMemo(
     () => availableSkills.map((skill) => skill.name),
@@ -125,13 +136,22 @@ export const SelectSkills = ({
       <Typography id="skills-selection-title" variant="h5" color="common.white">
         Выберите основные навыки ({selectedSkills.length}/{skillsToChoose})
       </Typography>
-      <Typography color="text.secondary" sx={{ mt: 0.75, mb: 2 }}>
+      <Typography color="text.secondary" sx={{ display: "none" }} aria-hidden>
         Доступны навыки класса «{selectedClass.name}». Сначала показаны навыки,
         использующие ваши самые высокие характеристики с учётом бонусов расы.
       </Typography>
+      <Typography color="text.secondary" sx={{ mt: 0.75, mb: 2 }}>
+        Выберите любые навыки из справочника. Навыки с владением от расы или предыстории выделены отдельно.
+      </Typography>
+
+      {(raceSkills.length > 0 || backgroundSkills.length > 0) && (
+        <Alert severity="info" sx={{ mb: 2, textAlign: "left" }}>
+          Навыки с владением от расы или предыстории выделены золотой рамкой. Их модификатор уже включает бонус мастерства.
+        </Alert>
+      )}
 
       {raceSkills.length > 0 && (
-        <Alert severity="info" sx={{ mb: 2, textAlign: "left" }}>
+        <Alert severity="info" sx={{ display: "none" }} aria-hidden>
           Раса «{selectedRace.name}» уже даёт владение: {raceSkills.join(", ")}.
           Эти навыки исключены из выбора класса, чтобы не было дублей.
         </Alert>
@@ -171,6 +191,11 @@ export const SelectSkills = ({
             const selected = selectedSkills.includes(skill.name);
             const disabled = !selected && selectedSkills.length >= skillsToChoose;
             const effectiveScore = getEffectiveScore(skill, scores);
+            const abilityModifier = Math.floor((effectiveScore - 10) / 2);
+            const grantedByRace = raceSkills.includes(skill.name);
+            const grantedByBackground = backgroundSkills.includes(skill.name);
+            const hasProficiency = selected || grantedByRace || grantedByBackground;
+            const skillModifier = abilityModifier + (hasProficiency ? 2 : 0);
             const recommended = effectiveScore === highestScore;
 
             return (
@@ -178,9 +203,15 @@ export const SelectSkills = ({
                 key={skill._id}
                 variant="outlined"
                 sx={{
-                  borderColor: selected ? "primary.main" : "rgba(255,255,255,0.14)",
+                  borderColor: selected
+                    ? "primary.main"
+                    : grantedByRace || grantedByBackground
+                    ? "secondary.main"
+                    : "rgba(255,255,255,0.14)",
                   backgroundColor: selected
                     ? "rgba(170, 59, 255, 0.12)"
+                    : grantedByRace || grantedByBackground
+                    ? "action.selected"
                     : "rgba(255,255,255,0.03)",
                   opacity: disabled ? 0.55 : 1,
                 }}
@@ -200,18 +231,40 @@ export const SelectSkills = ({
                         mb: 1,
                       }}
                     >
-                      <Typography variant="h6" color="common.white">
-                        {skill.name}
-                      </Typography>
+                      <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.75 }}>
+                        <Typography variant="h6" color="common.white">
+                          {skill.name}
+                        </Typography>
+                        <Typography
+                          variant="subtitle1"
+                          color={selected ? "primary.main" : "text.secondary"}
+                          sx={{ fontWeight: 700 }}
+                        >
+                          {formatModifier(skillModifier)}
+                        </Typography>
+                      </Box>
                       {selected && <Chip label="Выбран" color="primary" size="small" />}
                     </Box>
                     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75, mb: 1 }}>
                       <Chip label={skill.ability} size="small" variant="outlined" />
+                      <Chip
+                        label={`Модификатор: ${formatModifier(skillModifier)}`}
+                        color={selected ? "primary" : "default"}
+                        sx={{ display: "none" }}
+                        size="small"
+                      />
                       <Chip label={`Характеристика: ${effectiveScore}`} size="small" />
                       {recommended && (
                         <Chip label="Рекомендуется" color="secondary" size="small" />
                       )}
                     </Box>
+                    {(grantedByRace || grantedByBackground) && (
+                      <Typography variant="caption" color="secondary.main" sx={{ display: "block", mb: 1 }}>
+                        Владение: {[grantedByRace && `раса «${selectedRace.name}»`, grantedByBackground && `предыстория «${selectedBackground.name}»`]
+                          .filter(Boolean)
+                          .join(", ")}
+                      </Typography>
+                    )}
                     {skill.description && (
                       <Typography variant="body2" color="text.secondary">
                         {skill.description}
