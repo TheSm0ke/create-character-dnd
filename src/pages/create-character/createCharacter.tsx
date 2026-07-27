@@ -28,6 +28,7 @@ import {
 } from "./ui/select-abilities";
 import type { Race, Class, Background, Alignment, Language } from "../../api";
 import { getBackgroundLanguageChoiceCount } from "./ui/select-background/languageChoices";
+import { NavigationMenu } from "../../components/NavigationMenu";
 
 const steps = [
   "Выбор расы",
@@ -205,6 +206,7 @@ const CreateCharacter = () => {
     <Box
       sx={{ width: "100%", display: "flex", flexDirection: "column", gap: 2 }}
     >
+      <NavigationMenu />
       <Box
         sx={{
           position: "sticky",

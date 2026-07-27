@@ -376,6 +376,7 @@ interface ClassListProps {
 
 export const ClassList = ({ classes, selectedClass, onSelect }: ClassListProps) => {
   const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [searchQuery, setSearchQuery] = useState('');
   const normalizedSearchQuery = searchQuery.trim().toLocaleLowerCase('ru-RU');
   const filteredClasses = classes.filter((classData) => (
@@ -383,18 +384,12 @@ export const ClassList = ({ classes, selectedClass, onSelect }: ClassListProps) 
   ));
 
   return (
-    <Box sx={{ p: 2 }}>
+    <Box sx={{ padding: isMobile ? 1 : 2, width: '100%', boxSizing: 'border-box' }}>
       <Typography
-        variant="h4"
-        sx={{
-          color: theme.palette.secondary.main,
-          fontFamily: '"Cinzel", serif',
-          fontWeight: 700,
-          letterSpacing: '0.04em',
-          mb: 2.5,
-        }}
+        variant={isMobile ? 'h5' : 'h4'}
+        sx={{ color: 'text.primary', mb: isMobile ? 2 : 3 }}
       >
-        Выберите класс
+        Выбор класса
       </Typography>
       <TextField
         fullWidth
