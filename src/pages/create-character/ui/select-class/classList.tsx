@@ -2,39 +2,13 @@ import { useState } from 'react';
 import { alpha, useTheme } from '@mui/material/styles';
 import { Box, Typography, Chip, Divider, TextField, useMediaQuery } from '@mui/material';
 import type { Class } from '../../../../api';
-import barbarianBackground from '../../../../assets/class-icons/barbarian.webp';
-import bardBackground from '../../../../assets/class-icons/bard.webp';
-import clericBackground from '../../../../assets/class-icons/cleric.webp';
-import druidBackground from '../../../../assets/class-icons/druid.webp';
-import fighterBackground from '../../../../assets/class-icons/fighter.webp';
-import monkBackground from '../../../../assets/class-icons/monk.webp';
-import paladinBackground from '../../../../assets/class-icons/paladin.webp';
-import rangerBackground from '../../../../assets/class-icons/ranger.webp';
-import rogueBackground from '../../../../assets/class-icons/rogue.webp';
-import sorcererBackground from '../../../../assets/class-icons/sorcerer.webp';
-import warlockBackground from '../../../../assets/class-icons/warlock.webp';
-import wizardBackground from '../../../../assets/class-icons/wizard.webp';
+import { getClassBackgroundImage } from '../../../../assets/class-icons';
 import { ClassHeading } from './ClassHeading';
 import { hasSpellcasting } from './spellcastingUtils';
 
 // ==============================
 // Карточка одного класса
 // ==============================
-const CLASS_BACKGROUND_IMAGES: Record<string, string> = {
-  'Бард': bardBackground,
-  'Варвар': barbarianBackground,
-  'Воин': fighterBackground,
-  'Волшебник': wizardBackground,
-  'Чародей': sorcererBackground,
-  'Следопыт': rangerBackground,
-  'Плут': rogueBackground,
-  'Паладин': paladinBackground,
-  'Монах': monkBackground,
-  'Колдун': warlockBackground,
-  'Жрец': clericBackground,
-  'Друид': druidBackground,
-};
-
 const ClassCard = ({
   classData,
   selected,
@@ -64,7 +38,7 @@ const ClassCard = ({
 
   const handleClick = () => onSelect();
   const isSpellcaster = hasSpellcasting(spellcasting);
-  const backgroundImage = CLASS_BACKGROUND_IMAGES[name];
+  const backgroundImage = getClassBackgroundImage(name);
 
   const sortedLevels = [...levels].sort((a, b) => a.level - b.level);
   const firstLevels = sortedLevels.slice(0, 3);

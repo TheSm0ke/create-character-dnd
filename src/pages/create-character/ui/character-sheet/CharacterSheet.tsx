@@ -35,6 +35,7 @@ import { useFetch } from '../../../../api/useFetch';
 import type { AbilityKey } from '../../../../api/classes';
 import type { AbilityScores } from '../select-abilities';
 import type { ClassConfiguration } from '../select-class/classSelection';
+import { getClassBackgroundImage } from '../../../../assets/class-icons';
 
 interface Personality {
   traits: string[];
@@ -111,12 +112,40 @@ const getHitDie = (hitDice: string) => Number(hitDice.match(/d(\d+)/i)?.[1] ?? 0
 const SummaryCard = ({
   title,
   children,
+  backgroundImage,
 }: {
   title: string;
   children: ReactNode;
+  backgroundImage?: string;
 }) => (
-  <Card component="section" variant="outlined" sx={{ height: '100%' }}>
-    <CardContent>
+  <Card
+    component="section"
+    variant="outlined"
+    sx={{
+      position: backgroundImage ? 'relative' : undefined,
+      height: '100%',
+      overflow: backgroundImage ? 'hidden' : undefined,
+    }}
+  >
+    {backgroundImage && (
+      <Box
+        aria-hidden="true"
+        sx={{
+          position: 'absolute',
+          top: -12,
+          left: -12,
+          width: { xs: 140, sm: 180 },
+          height: { xs: 140, sm: 180 },
+          backgroundImage: `url("${backgroundImage}")`,
+          backgroundPosition: 'left top',
+          backgroundRepeat: 'no-repeat',
+          backgroundSize: 'contain',
+          opacity: 0.14,
+          pointerEvents: 'none',
+        }}
+      />
+    )}
+    <CardContent sx={backgroundImage ? { position: 'relative', zIndex: 1 } : undefined}>
       <Typography variant="h6" component="h2" sx={{ mb: 1.5 }}>
         {title}
       </Typography>
@@ -587,6 +616,7 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
   const firstLevelSlots = characterClass.spellcasting?.spell_slots_progression?.find(
     ({ level }) => level === 1,
   )?.slots;
+  const classBackgroundImage = getClassBackgroundImage(characterClass.name);
 
   const handleCreateCharacter = async () => {
     if (saving || !characterName.trim()) return;
@@ -667,7 +697,7 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
         <FeatureList features={race.traits.map((trait) => ({ ...trait, level: 1 }))} />
       </SummaryCard>
 
-      <SummaryCard title="Класс">
+      <SummaryCard title="Класс" backgroundImage={classBackgroundImage}>
         <Typography variant="h5">{characterClass.name}</Typography>
         <Typography color="text.secondary" sx={{ mt: 0.75 }}>
           {characterClass.description}
