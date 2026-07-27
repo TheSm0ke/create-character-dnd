@@ -45,6 +45,8 @@ const validator = {
     properties: {
       name: { bsonType: 'string', minLength: 1, maxLength: 120 },
       level: { bsonType: 'number', minimum: 1, maximum: 20 },
+      experience: { bsonType: 'number', minimum: 0 },
+      feat_ids: { bsonType: 'array', items: { bsonType: 'objectId' } },
       hit_points: {
         bsonType: 'object',
         required: ['current', 'maximum'],
@@ -109,6 +111,28 @@ const validator = {
             items: { bsonType: 'array', items: { bsonType: 'string' } },
           },
           instruments: { bsonType: 'array', items: { bsonType: 'string' } },
+          custom_equipment: {
+            bsonType: 'array',
+            items: {
+              bsonType: 'object',
+              required: ['name', 'count'],
+              properties: {
+                name: { bsonType: 'string' },
+                count: { bsonType: 'number', minimum: 1 },
+              },
+            },
+          },
+          removed_equipment: {
+            bsonType: 'array',
+            items: {
+              bsonType: 'object',
+              required: ['name', 'count'],
+              properties: {
+                name: { bsonType: 'string' },
+                count: { bsonType: 'number', minimum: 1 },
+              },
+            },
+          },
         },
       },
       spells: {

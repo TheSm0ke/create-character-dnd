@@ -1,4 +1,5 @@
 import { Alert, Box, Button, Card, CardContent, CircularProgress, Typography } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
 import { fetchCharacters } from '../../api';
 import { useFetch } from '../../api/useFetch';
 import { NavigationMenu } from '../../components/NavigationMenu';
@@ -10,6 +11,7 @@ const formatDate = (value: string) => new Intl.DateTimeFormat('ru-RU', {
 
 const CharactersList = () => {
   const { data: characters, loading, error, refetch } = useFetch(fetchCharacters);
+  const navigate = useNavigate();
 
   return (
     <Box sx={{ minHeight: '100vh', p: { xs: 2, sm: 3 }, pt: { xs: 8, sm: 3 } }}>
@@ -38,7 +40,21 @@ const CharactersList = () => {
       {!loading && !error && characters && characters.length > 0 && (
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(3, minmax(0, 1fr))' }, gap: 2 }}>
           {characters.map((character) => (
-            <Card key={character._id} component="article" variant="outlined">
+            <Card
+              key={character._id}
+              component="button"
+              type="button"
+              variant="outlined"
+              onClick={() => navigate(`/characters/${character._id}`)}
+              sx={{
+                cursor: 'pointer',
+                textAlign: 'left',
+                '&:hover, &:focus-visible': {
+                  borderColor: 'primary.main',
+                  backgroundColor: 'action.hover',
+                },
+              }}
+            >
               <CardContent>
                 <Typography variant="h6" component="h2">
                   {character.name}

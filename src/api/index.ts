@@ -12,4 +12,5 @@ export * from './armors';
 export * from './items';
 export * from './tools';
 export * from './equipment';
+export * from './feats';
 export * from './useFetch';

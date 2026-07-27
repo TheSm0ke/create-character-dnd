@@ -5,27 +5,43 @@ import {
   CardContent,
   Chip,
   Divider,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControl,
+  FormControlLabel,
+  InputLabel,
+  InputAdornment,
   List,
   ListItem,
   ListItemText,
+  MenuItem,
   Paper,
+  Select,
+  Switch,
   Tab,
   Tabs,
   TextField,
   Tooltip,
   Typography,
+  Button,
 } from '@mui/material';
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useState, type ReactNode } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from 'react';
 import {
   fetchArmors,
+  fetchFeats,
+  fetchSpellsByClassAndLevel,
   fetchSkills,
   fetchWeapons,
   createCharacter,
+  updateCharacter,
   searchEquipment,
   type Alignment,
   type Armor,
   type Background,
   type Class,
+  type CharacterEquipmentItem,
   type CreateCharacterPayload,
   type Race,
   type Spell,
@@ -36,6 +52,9 @@ import type { AbilityKey } from '../../../../api/classes';
 import type { AbilityScores } from '../select-abilities';
 import type { ClassConfiguration } from '../select-class/classSelection';
 import { getClassBackgroundImage } from '../../../../assets/class-icons';
+import { SubclassSelection } from '../select-class/class-configuration/ui/SubclassSelection';
+import { getSubclassUnlockLevel } from '../select-class/class-configuration/subclassUtils';
+import { FeatureList, SpellSlots, SummaryCard } from './SheetPrimitives';
 
 interface Personality {
   traits: string[];
@@ -55,13 +74,29 @@ interface CharacterSheetProps {
   selectedBackgroundLanguages: string[];
   classConfiguration: ClassConfiguration;
   characterName: string;
+  experience?: number;
+  featIds?: string[];
   currentHitPoints: number | null;
+  maximumHitPoints?: number;
+  initialConstitutionScore?: number;
+  initialCharacterLevel?: number;
+  characterLevel?: number;
+  characterId?: string;
   onCharacterNameChange: (name: string) => void;
+  onExperienceChange?: (experience: number) => void;
+  onFeatIdsChange?: (featIds: string[]) => void;
   onCurrentHitPointsChange: (hitPoints: number | null) => void;
+  onCharacterLevelChange?: (level: number) => void;
+  onAbilityScoresChange?: (scores: AbilityScores) => void;
+  onClassConfigurationChange?: (configuration: ClassConfiguration) => void;
+  customEquipment?: CharacterEquipmentItem[];
+  removedEquipment?: CharacterEquipmentItem[];
+  onCustomEquipmentChange?: (equipment: CharacterEquipmentItem[]) => void;
+  onRemovedEquipmentChange?: (equipment: CharacterEquipmentItem[]) => void;
 }
 
 export interface CharacterSheetHandle {
-  createCharacter: () => Promise<void>;
+  saveCharacter: () => Promise<void>;
 }
 
 const ABILITIES: Array<{ key: AbilityKey; name: string; abbreviation: string }> = [
@@ -108,87 +143,6 @@ const formatModifier = (score: number) => {
 };
 
 const getHitDie = (hitDice: string) => Number(hitDice.match(/d(\d+)/i)?.[1] ?? 0);
-
-const SummaryCard = ({
-  title,
-  children,
-  backgroundImage,
-}: {
-  title: string;
-  children: ReactNode;
-  backgroundImage?: string;
-}) => (
-  <Card
-    component="section"
-    variant="outlined"
-    sx={{
-      position: backgroundImage ? 'relative' : undefined,
-      height: '100%',
-      overflow: backgroundImage ? 'hidden' : undefined,
-    }}
-  >
-    {backgroundImage && (
-      <Box
-        aria-hidden="true"
-        sx={{
-          position: 'absolute',
-          top: -12,
-          left: -12,
-          width: { xs: 140, sm: 180 },
-          height: { xs: 140, sm: 180 },
-          backgroundImage: `url("${backgroundImage}")`,
-          backgroundPosition: 'left top',
-          backgroundRepeat: 'no-repeat',
-          backgroundSize: 'contain',
-          opacity: 0.14,
-          pointerEvents: 'none',
-        }}
-      />
-    )}
-    <CardContent sx={backgroundImage ? { position: 'relative', zIndex: 1 } : undefined}>
-      <Typography variant="h6" component="h2" sx={{ mb: 1.5 }}>
-        {title}
-      </Typography>
-      {children}
-    </CardContent>
-  </Card>
-);
-
-const FeatureList = ({
-  features,
-  characterLevel = 1,
-}: {
-  features: { name: string; level: number; description: string }[];
-  characterLevel?: number;
-}) => (
-  <List dense disablePadding>
-    {[...features]
-      .sort((first, second) => first.level - second.level)
-      .map((feature) => (
-        <ListItem key={`${feature.level}-${feature.name}`} disableGutters alignItems="flex-start">
-          <ListItemText
-            primary={
-              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
-                <Typography variant="subtitle2">{feature.name}</Typography>
-                <Chip
-                  label={
-                    feature.level <= characterLevel
-                      ? `${feature.level}-й уровень`
-                      : `с ${feature.level}-го уровня`
-                  }
-                  color={feature.level <= characterLevel ? 'primary' : 'default'}
-                  size="small"
-                  variant="outlined"
-                />
-              </Box>
-            }
-            secondary={feature.description}
-            slotProps={{ secondary: { sx: { whiteSpace: 'pre-line' } } }}
-          />
-        </ListItem>
-      ))}
-  </List>
-);
 
 const getSpellCost = (spell: Spell) => (
   spell.level === 'Заговор' ? 'без ячейки' : `${spell.level}-я ячейка`
@@ -279,114 +233,6 @@ const SpellList = ({ title, spells }: { title: string; spells: Spell[] }) => (
   </Box>
 );
 
-const toRomanNumeral = (value: number) => {
-  const numerals = [
-    [10, 'X'],
-    [9, 'IX'],
-    [5, 'V'],
-    [4, 'IV'],
-    [1, 'I'],
-  ] as const;
-
-  let remainder = value;
-  return numerals.reduce((result, [arabic, roman]) => {
-    const repetitions = Math.floor(remainder / arabic);
-    remainder %= arabic;
-    return result + roman.repeat(repetitions);
-  }, '');
-};
-
-const SpellSlots = ({ slots }: { slots?: number[] }) => {
-  const slotGroups = (slots ?? [])
-    .map((count, index) => ({ spellLevel: index + 1, count }))
-    .filter(({ count }) => count > 0);
-
-  if (slotGroups.length === 0) {
-    return (
-      <Typography variant="body2" color="text.secondary">
-        Нет ячеек.
-      </Typography>
-    );
-  }
-
-  return (
-    <Box
-      aria-label="Ячейки заклинаний"
-      sx={{
-        display: 'flex',
-        flexWrap: 'wrap',
-        gap: 1.5,
-        mt: 1,
-      }}
-    >
-      {slotGroups.map(({ spellLevel, count }) => (
-        <Paper
-          key={spellLevel}
-          variant="outlined"
-          sx={{
-            position: 'relative',
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr 1fr',
-            alignItems: 'flex-end',
-            justifyItems: 'center',
-            gap: 0.5,
-            minWidth: 94,
-            minHeight: 66,
-            px: 1,
-            pb: 1,
-            pt: 2.5,
-            overflow: 'visible',
-            borderColor: 'divider',
-            backgroundColor: 'background.default',
-            boxShadow: (theme) => `inset 0 -14px 18px ${theme.palette.action.selected}`,
-          }}
-        >
-          <Box
-            aria-label={`${spellLevel}-й уровень заклинаний`}
-            sx={{
-              position: 'absolute',
-              top: -13,
-              left: '50%',
-              display: 'grid',
-              width: 28,
-              height: 28,
-              placeItems: 'center',
-              transform: 'translateX(-50%)',
-              border: '1px solid',
-              borderColor: 'divider',
-              borderRadius: '50%',
-              backgroundColor: 'background.paper',
-              color: 'text.primary',
-              fontFamily: 'serif',
-              fontSize: '1.25rem',
-              fontWeight: 700,
-              lineHeight: 1,
-              boxShadow: (theme) => `0 2px 8px ${theme.palette.action.disabledBackground}`,
-            }}
-          >
-            {toRomanNumeral(spellLevel)}
-          </Box>
-          {Array.from({ length: count }, (_, slotIndex) => (
-            <Box
-              key={slotIndex}
-              role="img"
-              aria-label={`Ячейка ${slotIndex + 1} из ${count}: доступна`}
-              sx={{
-                width: 22,
-                height: 22,
-                border: '1px solid',
-                borderColor: 'primary.light',
-                backgroundColor: 'primary.main',
-                boxShadow: (theme) => `0 0 10px ${theme.palette.primary.main}`,
-              }}
-            />
-          ))}
-        </Paper>
-      ))}
-    </Box>
-  );
-};
-
 const calculateArmorClass = (armors: Armor[], dexterityModifier: number) => {
   const shield = armors.find((armor) => normalize(armor.name).includes('щит'));
   const wornArmor = armors.find((armor) => !normalize(armor.name).includes('щит'));
@@ -418,10 +264,12 @@ const getWeightInPounds = (weight?: string) => {
 interface InventoryEntry {
   name: string;
   count: number;
+  editableCount: number;
   type: string;
   weight?: string;
   details: string;
   sourcePack?: string;
+  sourceName: string;
 }
 
 interface SearchInventoryItem {
@@ -442,15 +290,33 @@ interface SearchInventoryItem {
   skills?: unknown[];
 }
 
+interface AppliedLevelChange {
+  level: number;
+  abilityScoreIncrease?: AbilityKey;
+  selectedSubclassId?: string;
+  addedCantripIds: string[];
+  addedSpellIds: string[];
+  addedFeatId?: string;
+}
+
+const getInventoryTypeLabel = (type?: string) => {
+  if (type?.toLocaleLowerCase('ru-RU') === 'item') return 'Предмет';
+  return type || 'Снаряжение';
+};
+
 const getInventoryEntryFromSearchItem = (
   item: SearchInventoryItem,
   count: number,
+  editableCount: number,
+  sourceName: string,
   sourcePack?: string,
 ): InventoryEntry => {
   if (item.damage !== undefined) {
     return {
       name: item.name,
       count,
+      editableCount,
+      sourceName,
       type: 'Оружие',
       weight: item.weight,
       details: `Урон: ${item.damage ?? '—'} ${item.damageType ?? ''}. ${item.properties?.map((property) => property.name).join(', ') || 'Без особых свойств.'}`,
@@ -462,6 +328,8 @@ const getInventoryEntryFromSearchItem = (
     return {
       name: item.name,
       count,
+      editableCount,
+      sourceName,
       type: 'Броня',
       weight: item.weight,
       details: `КД: ${item.classArmor}. Требование Силы: ${item.needStrong || 'нет'}. Помеха скрытности: ${item.Secrecy ? 'да' : 'нет'}.`,
@@ -472,11 +340,42 @@ const getInventoryEntryFromSearchItem = (
   return {
     name: item.name,
     count,
-    type: item.category || item.type || 'Снаряжение',
+    editableCount,
+    sourceName,
+    type: getInventoryTypeLabel(item.category || item.type),
     weight: item.weight,
     details: item.detail || item.description || 'Описание отсутствует в справочнике.',
     sourcePack,
   };
+};
+
+const mergeInventoryEntries = (entries: InventoryEntry[]): InventoryEntry[] => {
+  const entriesByName = new Map<string, InventoryEntry>();
+
+  entries.forEach((entry) => {
+    const key = normalize(entry.name);
+    const current = entriesByName.get(key);
+    if (!current) {
+      entriesByName.set(key, { ...entry, sourceName: entry.name });
+      return;
+    }
+
+    const sourcePacks = [current.sourcePack, entry.sourcePack]
+      .flatMap((sourcePack) => sourcePack?.split(', ') ?? []);
+    const sourcePack = [...new Set(sourcePacks)].join(', ') || undefined;
+    const entryWithDetails = !current.weight && entry.weight ? entry : current;
+
+    entriesByName.set(key, {
+      ...entryWithDetails,
+      name: current.name,
+      sourceName: current.name,
+      count: current.count + entry.count,
+      editableCount: current.editableCount + entry.editableCount,
+      sourcePack,
+    });
+  });
+
+  return [...entriesByName.values()];
 };
 
 export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetProps>(({
@@ -490,20 +389,57 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
   selectedBackgroundLanguages,
   classConfiguration,
   characterName,
+  experience = 0,
+  featIds = [],
   currentHitPoints,
+  maximumHitPoints,
+  initialConstitutionScore,
+  initialCharacterLevel = 1,
+  characterLevel = 1,
+  characterId,
   onCharacterNameChange,
+  onExperienceChange,
+  onFeatIdsChange,
   onCurrentHitPointsChange,
+  onCharacterLevelChange,
+  onAbilityScoresChange,
+  onClassConfigurationChange,
+  customEquipment = [],
+  removedEquipment = [],
+  onCustomEquipmentChange,
+  onRemovedEquipmentChange,
 }, ref) => {
   const [tab, setTab] = useState(0);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedCharacterId, setSavedCharacterId] = useState<string | null>(null);
+  const [pendingLevel, setPendingLevel] = useState<number | null>(null);
+  const [abilityScoreIncrease, setAbilityScoreIncrease] = useState<AbilityKey | ''>('');
+  const [advancementChoice, setAdvancementChoice] = useState<'ability' | 'feat'>('ability');
+  const [pendingFeatId, setPendingFeatId] = useState('');
+  const [pendingSubclassId, setPendingSubclassId] = useState('');
+  const [pendingCantrips, setPendingCantrips] = useState<Spell[]>([]);
+  const [pendingSpells, setPendingSpells] = useState<Spell[]>([]);
+  const [availableCantrips, setAvailableCantrips] = useState<Spell[]>([]);
+  const [availableSpells, setAvailableSpells] = useState<Spell[]>([]);
+  const [levelSpellsLoading, setLevelSpellsLoading] = useState(false);
+  const [levelSpellsError, setLevelSpellsError] = useState<string | null>(null);
+  const [appliedLevelChanges, setAppliedLevelChanges] = useState<AppliedLevelChange[]>([]);
+  const [isAbilityEditing, setIsAbilityEditing] = useState(false);
+  const [isInventoryDialogOpen, setIsInventoryDialogOpen] = useState(false);
+  const [inventorySearchQuery, setInventorySearchQuery] = useState('');
+  const [inventorySearchResults, setInventorySearchResults] = useState<SearchInventoryItem[]>([]);
+  const [inventorySearchLoading, setInventorySearchLoading] = useState(false);
+  const [inventorySearchError, setInventorySearchError] = useState<string | null>(null);
+  const [inventoryRemovalCounts, setInventoryRemovalCounts] = useState<Record<string, number>>({});
   const { data: skillsData, loading: skillsLoading } = useFetch(fetchSkills);
+  const { data: featsData, loading: featsLoading } = useFetch(fetchFeats);
   const { data: weaponsData } = useFetch(fetchWeapons);
   const { data: armorsData } = useFetch(fetchArmors);
   const skills = skillsData ?? [];
   const weapons = weaponsData ?? [];
   const armors = armorsData ?? [];
+  const feats = featsData ?? [];
 
   const totalScores = useMemo(() => {
     const totals = { ...abilityScores };
@@ -520,24 +456,31 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
   const equipmentNames = [
     ...characterClass.fixed_equipment.map((item) => item.name),
     ...classConfiguration.equipment.flat(),
+    ...customEquipment.map((item) => item.name),
   ];
   const selectedEquipment = new Set(equipmentNames.map(normalize));
   const selectedWeapons = weapons.filter((weapon) => selectedEquipment.has(normalize(weapon.name)));
   const selectedArmors = armors.filter((armor) => selectedEquipment.has(normalize(armor.name)));
   const inventorySources = useMemo(() => {
-    const counts = new Map<string, { name: string; count: number }>();
-    const addItem = (name: string, count = 1) => {
+    const counts = new Map<string, { name: string; count: number; editableCount: number; sourceName: string }>();
+    const addItem = (name: string, count = 1, editable = false) => {
       const key = normalize(name);
       const current = counts.get(key);
-      counts.set(key, { name, count: (current?.count ?? 0) + count });
+      counts.set(key, {
+        name,
+        count: (current?.count ?? 0) + count,
+        editableCount: (current?.editableCount ?? 0) + (editable ? count : 0),
+        sourceName: name,
+      });
     };
 
     characterClass.fixed_equipment.forEach((item) => addItem(item.name, item.count));
-    classConfiguration.equipment.flat().forEach((item) => addItem(item));
-    classConfiguration.instruments?.forEach((instrument) => addItem(instrument));
+    classConfiguration.equipment.flat().forEach((item) => addItem(item, 1, true));
+    classConfiguration.instruments?.forEach((instrument) => addItem(instrument, 1, true));
+    customEquipment.forEach((item) => addItem(item.name, item.count, true));
 
     return [...counts.values()];
-  }, [characterClass.fixed_equipment, classConfiguration.equipment, classConfiguration.instruments]);
+  }, [characterClass.fixed_equipment, classConfiguration.equipment, classConfiguration.instruments, customEquipment]);
   const [resolvedInventoryEntries, setResolvedInventoryEntries] = useState<InventoryEntry[] | null>(null);
 
   useEffect(() => {
@@ -555,6 +498,8 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
                 getInventoryEntryFromSearchItem(
                   item,
                   source.count * (item.count ?? 1),
+                  source.editableCount * (item.count ?? 1),
+                  source.sourceName,
                   result.isPack ? source.name : undefined,
                 ),
               );
@@ -566,13 +511,15 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
           return [{
             name: source.name,
             count: source.count,
+            editableCount: source.editableCount,
+            sourceName: source.sourceName,
             type: 'Снаряжение',
             details: 'Подробное описание не найдено в справочнике.',
           } satisfies InventoryEntry];
         }),
       );
 
-      if (!cancelled) setResolvedInventoryEntries(entriesBySource.flat());
+      if (!cancelled) setResolvedInventoryEntries(mergeInventoryEntries(entriesBySource.flat()));
     };
 
     void loadInventoryDetails();
@@ -582,11 +529,25 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
     };
   }, [inventorySources]);
 
-  const inventoryEntries: InventoryEntry[] = resolvedInventoryEntries ?? inventorySources.map((source): InventoryEntry => ({
-    ...source,
-    type: 'Снаряжение',
-    details: 'Загрузка подробностей предмета…',
-  }));
+  const rawInventoryEntries: InventoryEntry[] = resolvedInventoryEntries ?? mergeInventoryEntries(
+    inventorySources.map((source): InventoryEntry => ({
+      ...source,
+      type: 'Снаряжение',
+      details: 'Загрузка подробностей предмета…',
+    })),
+  );
+  const remainingRemovedCounts = new Map(
+    removedEquipment.map((item) => [normalize(item.name), item.count]),
+  );
+  const inventoryEntries = rawInventoryEntries.flatMap((entry): InventoryEntry[] => {
+    const key = normalize(entry.name);
+    const removedCount = remainingRemovedCounts.get(key) ?? 0;
+    const removedFromEntry = Math.min(entry.count, removedCount);
+    remainingRemovedCounts.set(key, removedCount - removedFromEntry);
+    const count = entry.count - removedFromEntry;
+
+    return count > 0 ? [{ ...entry, count, editableCount: count }] : [];
+  });
   const totalWeight = inventoryEntries.reduce(
     (total, entry) => total + (getWeightInPounds(entry.weight) ?? 0) * entry.count,
     0,
@@ -595,9 +556,78 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
     (entry) => getWeightInPounds(entry.weight) === undefined,
   );
 
+  useEffect(() => {
+    if (!isInventoryDialogOpen || inventorySearchQuery.trim().length < 2) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    const timeoutId = window.setTimeout(() => {
+      setInventorySearchLoading(true);
+      setInventorySearchError(null);
+      void searchEquipment(inventorySearchQuery.trim())
+        .then((result) => {
+          if (!cancelled) setInventorySearchResults(result.items as unknown as SearchInventoryItem[]);
+        })
+        .catch(() => {
+          if (!cancelled) setInventorySearchError('Не удалось выполнить поиск предметов.');
+        })
+        .finally(() => {
+          if (!cancelled) setInventorySearchLoading(false);
+        });
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [inventorySearchQuery, isInventoryDialogOpen]);
+
+  const addCustomInventoryItem = (item: SearchInventoryItem) => {
+    const existingItem = customEquipment.find((entry) => normalize(entry.name) === normalize(item.name));
+    const nextEquipment = existingItem
+      ? customEquipment.map((entry) => (
+        normalize(entry.name) === normalize(item.name)
+          ? { ...entry, count: entry.count + 1 }
+          : entry
+      ))
+      : [...customEquipment, { name: item.name, count: 1 }];
+
+    onCustomEquipmentChange?.(nextEquipment);
+  };
+
+  const removeInventoryItem = (entry: InventoryEntry, quantity: number) => {
+    const existingItem = removedEquipment.find((item) => normalize(item.name) === normalize(entry.name));
+    const nextRemovedEquipment = existingItem
+      ? removedEquipment.map((item) => (
+        normalize(item.name) === normalize(entry.name)
+          ? { ...item, count: item.count + quantity }
+          : item
+      ))
+      : [...removedEquipment, { name: entry.name, count: quantity }];
+
+    onRemovedEquipmentChange?.(nextRemovedEquipment);
+  };
+
   const constitutionModifier = Math.floor((totalScores.con - 10) / 2);
+  const initialConstitutionModifier = Math.floor(((initialConstitutionScore ?? totalScores.con) - 10) / 2);
   const dexterityModifier = Math.floor((totalScores.dex - 10) / 2);
-  const hitPoints = Math.max(1, getHitDie(characterClass.hit_dice) + constitutionModifier);
+  const hitDie = getHitDie(characterClass.hit_dice);
+  const hitPointsPerLevel = Math.max(1, Math.floor(hitDie / 2) + 1 + constitutionModifier);
+  const calculatedHitPoints = Math.max(
+    1,
+    hitDie + constitutionModifier + (characterLevel - 1) * hitPointsPerLevel,
+  );
+  const hitPoints = maximumHitPoints === undefined
+    ? calculatedHitPoints
+    : Math.max(
+      1,
+      maximumHitPoints
+        + (constitutionModifier - initialConstitutionModifier) * initialCharacterLevel
+        + (characterLevel - initialCharacterLevel) * hitPointsPerLevel,
+    );
+  const proficiencyBonus = characterClass.levels.find(({ level }) => level === characterLevel)?.proficiency_bonus
+    ?? (Math.ceil(characterLevel / 4) + 1);
   const armorClass = calculateArmorClass(selectedArmors, dexterityModifier);
   const classSkills = [
     ...selectedSkills,
@@ -613,19 +643,201 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
     if (firstSelected !== secondSelected) return firstSelected ? -1 : 1;
     return first.name.localeCompare(second.name, 'ru-RU');
   });
-  const firstLevelSlots = characterClass.spellcasting?.spell_slots_progression?.find(
-    ({ level }) => level === 1,
+  const currentLevelSlots = characterClass.spellcasting?.spell_slots_progression?.find(
+    ({ level }) => level === characterLevel,
   )?.slots;
   const classBackgroundImage = getClassBackgroundImage(characterClass.name);
+  const unlockedSubclassSpells = selectedSubclass?.class_spells?.filter(
+    ({ level_requirement }) => level_requirement <= characterLevel,
+  ) ?? [];
+  const nextLevelInfo = pendingLevel === null
+    ? undefined
+    : characterClass.levels.find(({ level }) => level === pendingLevel);
+  const nextClassFeatures = pendingLevel === null
+    ? []
+    : characterClass.features.filter((feature) => feature.level === pendingLevel);
+  const nextFeatureImprovements = pendingLevel === null
+    ? []
+    : characterClass.features.flatMap((feature) => feature.improvements
+      .filter((improvement) => improvement.level === pendingLevel)
+      .map((improvement) => ({ name: feature.name, description: improvement.description })));
+  const nextSubclassFeatures = pendingLevel === null || !selectedSubclass
+    ? []
+    : selectedSubclass.features.filter((feature) => feature.level === pendingLevel);
+  const requiresSubclassSelection = pendingLevel !== null
+    && !selectedSubclass
+    && characterClass.subclasses.some((subclass) => getSubclassUnlockLevel(subclass) <= pendingLevel);
+  const requiresAbilityScoreIncrease = nextLevelInfo?.features.some((feature) => (
+    normalize(feature).includes('увеличение характеристик')
+  )) ?? false;
+  const cantripsToChooseAtNextLevel = Math.max(
+    0,
+    (nextLevelInfo?.cantrips_known ?? classConfiguration.cantrips.length) - classConfiguration.cantrips.length,
+  );
+  const spellsToChooseAtNextLevel = Math.max(
+    0,
+    (nextLevelInfo?.spells_known ?? classConfiguration.spells1.length) - classConfiguration.spells1.length,
+  );
+  const maxSpellLevelAtNextLevel = (nextLevelInfo?.slots ?? []).reduce(
+    (maximumLevel, slots, index) => (slots > 0 ? index + 1 : maximumLevel),
+    0,
+  );
+  const requiresCantripSelection = cantripsToChooseAtNextLevel > 0;
+  const requiresSpellSelection = spellsToChooseAtNextLevel > 0;
+  const requiresAdvancementChoice = requiresAbilityScoreIncrease;
 
-  const handleCreateCharacter = async () => {
+  useEffect(() => {
+    if (pendingLevel === null || (!requiresCantripSelection && !requiresSpellSelection)) return undefined;
+
+    let cancelled = false;
+    const className = characterClass.name.toLocaleLowerCase('ru-RU');
+
+    const loadLevelSpells = async () => {
+      setLevelSpellsLoading(true);
+      setLevelSpellsError(null);
+
+      try {
+        const cantripPromise: Promise<Spell[]> = requiresCantripSelection
+          ? fetchSpellsByClassAndLevel(className, 'Заговор')
+          : Promise.resolve([]);
+        const spellsPromise: Promise<Spell[][]> = requiresSpellSelection
+          ? Promise.all(
+            Array.from(
+              { length: Math.max(1, maxSpellLevelAtNextLevel) },
+              (_, index) => fetchSpellsByClassAndLevel(className, index + 1),
+            ),
+          )
+          : Promise.resolve([]);
+        const [cantrips, spellLevels] = await Promise.all([cantripPromise, spellsPromise]);
+
+        if (cancelled) return;
+        setAvailableCantrips(cantrips.filter((spell) => (
+          !classConfiguration.cantrips.some((selectedSpell) => selectedSpell._id === spell._id)
+        )));
+        setAvailableSpells(spellLevels.flat().filter((spell) => (
+          !classConfiguration.spells1.some((selectedSpell) => selectedSpell._id === spell._id)
+        )));
+      } catch {
+        if (!cancelled) setLevelSpellsError('Не удалось загрузить список заклинаний класса.');
+      } finally {
+        if (!cancelled) setLevelSpellsLoading(false);
+      }
+    };
+
+    void loadLevelSpells();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    characterClass.name,
+    classConfiguration.cantrips,
+    classConfiguration.spells1,
+    maxSpellLevelAtNextLevel,
+    pendingLevel,
+    requiresCantripSelection,
+    requiresSpellSelection,
+  ]);
+
+  const resetPendingLevelChoices = () => {
+    setAbilityScoreIncrease('');
+    setAdvancementChoice('ability');
+    setPendingFeatId('');
+    setPendingSubclassId('');
+    setPendingCantrips([]);
+    setPendingSpells([]);
+    setLevelSpellsError(null);
+  };
+
+  const handleIncreaseLevel = () => {
+    if (characterLevel >= 20 || pendingLevel !== null) return;
+    resetPendingLevelChoices();
+    setPendingLevel(characterLevel + 1);
+  };
+
+  const handleDecreaseLevel = () => {
+    if (characterLevel <= 1 || pendingLevel !== null) return;
+
+    const change = appliedLevelChanges.find((item) => item.level === characterLevel);
+    if (change?.abilityScoreIncrease && onAbilityScoresChange) {
+      onAbilityScoresChange({
+        ...abilityScores,
+        [change.abilityScoreIncrease]: Math.max(1, abilityScores[change.abilityScoreIncrease] - 2),
+      });
+    }
+
+    if (change && onClassConfigurationChange) {
+      onClassConfigurationChange({
+        ...classConfiguration,
+        subclass: change.selectedSubclassId && classConfiguration.subclass === change.selectedSubclassId
+          ? undefined
+          : classConfiguration.subclass,
+        cantrips: classConfiguration.cantrips.filter((spell) => !change.addedCantripIds.includes(spell._id)),
+        spells1: classConfiguration.spells1.filter((spell) => !change.addedSpellIds.includes(spell._id)),
+      });
+    }
+    if (change?.addedFeatId) {
+      onFeatIdsChange?.(featIds.filter((featId) => featId !== change.addedFeatId));
+    }
+
+    if (change) {
+      setAppliedLevelChanges((changes) => changes.filter((item) => item.level !== characterLevel));
+    }
+    onCharacterLevelChange?.(characterLevel - 1);
+  };
+
+  const handleConfirmLevelUp = () => {
+    if (pendingLevel === null) return;
+    if (requiresAdvancementChoice && advancementChoice === 'ability' && !abilityScoreIncrease) return;
+    if (requiresAdvancementChoice && advancementChoice === 'feat' && !pendingFeatId) return;
+    if (requiresSubclassSelection && !pendingSubclassId) return;
+    if (requiresCantripSelection && pendingCantrips.length !== cantripsToChooseAtNextLevel) return;
+    if (requiresSpellSelection && pendingSpells.length !== spellsToChooseAtNextLevel) return;
+
+    if (advancementChoice === 'ability' && abilityScoreIncrease && onAbilityScoresChange) {
+      onAbilityScoresChange({
+        ...abilityScores,
+        [abilityScoreIncrease]: Math.min(20, abilityScores[abilityScoreIncrease] + 2),
+      });
+    }
+    if (advancementChoice === 'feat' && pendingFeatId) {
+      onFeatIdsChange?.([...featIds, pendingFeatId]);
+    }
+
+    if (onClassConfigurationChange) {
+      onClassConfigurationChange?.({
+        ...classConfiguration,
+        subclass: pendingSubclassId || classConfiguration.subclass,
+        cantrips: [...classConfiguration.cantrips, ...pendingCantrips],
+        spells1: [...classConfiguration.spells1, ...pendingSpells],
+      });
+    }
+
+    setAppliedLevelChanges((changes) => [
+      ...changes,
+      {
+        level: pendingLevel,
+        abilityScoreIncrease: advancementChoice === 'ability' ? abilityScoreIncrease || undefined : undefined,
+        selectedSubclassId: pendingSubclassId || undefined,
+        addedCantripIds: pendingCantrips.map((spell) => spell._id),
+        addedSpellIds: pendingSpells.map((spell) => spell._id),
+        addedFeatId: advancementChoice === 'feat' ? pendingFeatId || undefined : undefined,
+      },
+    ]);
+    onCharacterLevelChange?.(pendingLevel);
+    setPendingLevel(null);
+    resetPendingLevelChoices();
+  };
+
+  const handleSaveCharacter = async () => {
     if (saving || !characterName.trim()) return;
 
     const payload: CreateCharacterPayload = {
       name: characterName.trim(),
-      level: 1,
+      level: characterLevel,
+      experience,
+      feat_ids: featIds,
       hit_points: {
-        current: currentHitPoints ?? hitPoints,
+        current: Math.min(currentHitPoints ?? hitPoints, hitPoints),
         maximum: hitPoints,
       },
       race_id: race._id,
@@ -648,6 +860,8 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
         fixed_equipment: characterClass.fixed_equipment,
         selected_equipment: classConfiguration.equipment,
         instruments: classConfiguration.instruments ?? [],
+        custom_equipment: customEquipment,
+        removed_equipment: removedEquipment,
       },
       spells: {
         cantrip_ids: classConfiguration.cantrips.map((spell) => spell._id),
@@ -660,16 +874,18 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
     setSavedCharacterId(null);
 
     try {
-      const createdCharacter = await createCharacter(payload);
-      setSavedCharacterId(createdCharacter._id);
+      const savedCharacter = characterId
+        ? await updateCharacter(characterId, payload)
+        : await createCharacter(payload);
+      setSavedCharacterId(savedCharacter._id);
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : 'Не удалось создать персонажа.');
+      setSaveError(error instanceof Error ? error.message : 'Не удалось сохранить персонажа.');
     } finally {
       setSaving(false);
     }
   };
 
-  useImperativeHandle(ref, () => ({ createCharacter: handleCreateCharacter }));
+  useImperativeHandle(ref, () => ({ saveCharacter: handleSaveCharacter }));
 
   const basicTab = (
     <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, minmax(0, 1fr))' }, gap: 2 }}>
@@ -725,38 +941,23 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
         <Typography variant="subtitle2" sx={{ mt: 2 }}>
           Умения класса
         </Typography>
-        <FeatureList features={characterClass.features} />
+        <FeatureList features={characterClass.features} characterLevel={characterLevel} />
+        {selectedSubclass && (
+          <>
+            <Typography variant="subtitle2" sx={{ mt: 2 }}>
+              Подкласс: {selectedSubclass.name}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, whiteSpace: 'pre-line' }}>
+              {selectedSubclass.description}
+            </Typography>
+            <Typography variant="subtitle2" sx={{ mt: 1.5 }}>
+              Особенности подкласса
+            </Typography>
+            <FeatureList features={selectedSubclass.features} characterLevel={characterLevel} />
+          </>
+        )}
       </SummaryCard>
 
-      <SummaryCard title="Характеристики и бой">
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 1 }}>
-          {ABILITIES.map(({ key, name, abbreviation }) => (
-            <Paper key={key} variant="outlined" sx={{ p: 1, textAlign: 'center' }}>
-              <Typography variant="caption" color="text.secondary">
-                {abbreviation}
-              </Typography>
-              <Typography variant="h5">{totalScores[key]}</Typography>
-              <Typography color="secondary.main">{formatModifier(totalScores[key])}</Typography>
-              <Typography variant="caption" color="text.secondary">
-                {name}
-              </Typography>
-            </Paper>
-          ))}
-        </Box>
-        <Divider sx={{ my: 2 }} />
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 1 }}>
-          <Typography>Макс. хиты: <strong>{hitPoints}</strong></Typography>
-          <Typography>КД: <strong>{armorClass}</strong></Typography>
-          <Typography>Инициатива: <strong>{formatModifier(totalScores.dex)}</strong></Typography>
-          <Typography>Бонус мастерства: <strong>+2</strong></Typography>
-        </Box>
-      </SummaryCard>
-
-      <SummaryCard title="Дополнительный класс">
-        <Typography variant="body2" color="text.secondary">
-          Дополнительный класс не выбран. Этот раздел заполнится после добавления выбора мультикласса в мастер.
-        </Typography>
-      </SummaryCard>
     </Box>
   );
 
@@ -804,16 +1005,16 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
             <Typography variant="body2" color="text.secondary">
               Базовая характеристика: {characterClass.spellcasting.ability}. Фокус: {characterClass.spellcasting.focus || 'не указан'}.
             </Typography>
-            <Typography variant="subtitle2" sx={{ mt: 2 }}>Ячейки на 1-м уровне</Typography>
-            <SpellSlots slots={firstLevelSlots} />
+            <Typography variant="subtitle2" sx={{ mt: 2 }}>Ячейки на {characterLevel}-м уровне</Typography>
+            <SpellSlots slots={currentLevelSlots} />
             <Divider sx={{ my: 2 }} />
             <SpellList title="Заговоры" spells={classConfiguration.cantrips} />
-            <SpellList title="Заклинания 1-го уровня" spells={classConfiguration.spells1} />
-            {selectedSubclass?.class_spells && selectedSubclass.class_spells.length > 0 && (
+            <SpellList title="Заклинания" spells={classConfiguration.spells1} />
+            {unlockedSubclassSpells.length > 0 && (
               <>
                 <Divider sx={{ my: 2 }} />
                 <Typography variant="subtitle2">Заклинания подкласса</Typography>
-                {selectedSubclass.class_spells.map(({ level_requirement, spells }) => (
+                {unlockedSubclassSpells.map(({ level_requirement, spells }) => (
                   <Box key={level_requirement} sx={{ mt: 1 }}>
                     <Chip label={`${level_requirement}-й уровень`} size="small" variant="outlined" />
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
@@ -852,7 +1053,7 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
               const abilityModifier = abilityKey
                 ? Math.floor((totalScores[abilityKey] - 10) / 2)
                 : 0;
-              const modifier = abilityModifier + (selected ? 2 : 0);
+              const modifier = abilityModifier + (selected ? proficiencyBonus : 0);
 
               return (
                 <Paper
@@ -911,12 +1112,19 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
   const inventoryTab = (
     <Box>
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
-        <Typography variant="subtitle2" color="text.secondary">
-          Общий вес
-        </Typography>
-        <Typography variant="h4" color="secondary.main">
-          {totalWeight.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} фнт.
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2 }}>
+          <Box>
+            <Typography variant="subtitle2" color="text.secondary">
+              Общий вес
+            </Typography>
+            <Typography variant="h4" color="secondary.main">
+              {totalWeight.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} фнт.
+            </Typography>
+          </Box>
+          <Button variant="contained" onClick={() => setIsInventoryDialogOpen(true)}>
+            Добавить предмет
+          </Button>
+        </Box>
         {hasItemsWithoutWeight && (
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
             В итог не включены предметы без веса в справочнике.
@@ -932,8 +1140,15 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
             gap: 2,
           }}
         >
-          {inventoryEntries.map((entry, index) => (
-            <Card key={`${normalize(entry.name)}-${index}`} component="article" variant="outlined" sx={{ height: '100%' }}>
+          {inventoryEntries.map((entry, index) => {
+            const entryKey = `${normalize(entry.sourceName)}-${index}`;
+            const removalCount = Math.min(
+              entry.editableCount,
+              Math.max(1, inventoryRemovalCounts[entryKey] ?? 1),
+            );
+
+            return (
+            <Card key={entryKey} component="article" variant="outlined" sx={{ height: '100%' }}>
               <CardContent>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, mb: 1 }}>
                   <Typography variant="h6" component="h2">{entry.name}</Typography>
@@ -947,9 +1162,40 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
                 <Typography variant="body2" color="text.secondary">
                   {entry.details}
                 </Typography>
+                <Divider sx={{ my: 1.5 }} />
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                  {entry.editableCount > 1 && (
+                    <TextField
+                      label="Количество"
+                      type="number"
+                      value={removalCount}
+                      onChange={(event) => {
+                        const value = Number(event.target.value);
+                        if (Number.isFinite(value)) {
+                          setInventoryRemovalCounts((counts) => ({
+                            ...counts,
+                            [entryKey]: Math.max(1, Math.min(entry.editableCount, value)),
+                          }));
+                        }
+                      }}
+                      slotProps={{ htmlInput: { min: 1, max: entry.editableCount, step: 1 } }}
+                      size="small"
+                      sx={{ width: 132 }}
+                    />
+                  )}
+                  <Button size="small" color="error" onClick={() => removeInventoryItem(entry, removalCount)}>
+                    Удалить
+                  </Button>
+                  {entry.editableCount > removalCount && (
+                    <Button size="small" color="error" onClick={() => removeInventoryItem(entry, entry.editableCount)}>
+                      Удалить всё
+                    </Button>
+                  )}
+                </Box>
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
         </Box>
       ) : (
         <SummaryCard title="Инвентарь">
@@ -970,14 +1216,14 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
       <Box sx={{ mb: 2 }}>
         <Typography variant="h4">Лист персонажа</Typography>
         <Typography color="text.secondary" sx={{ mt: 0.5 }}>
-          Персонаж 1-го уровня · {race.name} · {characterClass.name}
+          Персонаж {characterLevel}-го уровня · {race.name} · {characterClass.name}
         </Typography>
       </Box>
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: { xs: '1fr', sm: 'minmax(0, 2fr) minmax(180px, 1fr)' },
+          gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 2fr) repeat(3, minmax(140px, 1fr))' },
             gap: 2,
           }}
         >
@@ -988,7 +1234,7 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
             fullWidth
           />
           <TextField
-            label={`Текущие ХП (максимум ${hitPoints})`}
+            label="Хиты"
             type="number"
             value={currentHitPoints ?? hitPoints}
             onChange={(event) => {
@@ -997,9 +1243,102 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
                 value === '' ? null : Math.min(hitPoints, Math.max(0, Number(value))),
               );
             }}
-            slotProps={{ htmlInput: { min: 0, max: hitPoints, step: 1 } }}
+            slotProps={{
+              htmlInput: { min: 0, max: hitPoints, step: 1 },
+              input: {
+                endAdornment: <InputAdornment position="end">/ {hitPoints}</InputAdornment>,
+              },
+            }}
             fullWidth
           />
+          <Box sx={{ display: 'flex', alignItems: 'stretch', gap: 0.75 }}>
+            <Button
+              aria-label="Понизить уровень"
+              onClick={handleDecreaseLevel}
+              disabled={characterLevel <= 1 || pendingLevel !== null}
+              variant="outlined"
+            >
+              −
+            </Button>
+            <TextField
+              label="Уровень"
+              value={characterLevel}
+              slotProps={{ input: { readOnly: true } }}
+              fullWidth
+            />
+            <Button
+              aria-label="Повысить уровень"
+              onClick={handleIncreaseLevel}
+              disabled={characterLevel >= 20 || pendingLevel !== null}
+              variant="contained"
+            >
+              +
+            </Button>
+          </Box>
+          <TextField
+            label="Опыт"
+            type="number"
+            value={experience}
+            onChange={(event) => {
+              const value = Number(event.target.value);
+              if (Number.isFinite(value)) onExperienceChange?.(Math.max(0, value));
+            }}
+            slotProps={{ htmlInput: { min: 0, step: 1 } }}
+            fullWidth
+          />
+        </Box>
+        <Divider sx={{ my: 2 }} />
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, mb: 1 }}>
+          <Typography variant="subtitle2">Характеристики</Typography>
+          <FormControlLabel
+            label="Ручной ввод"
+            control={(
+              <Switch
+                checked={isAbilityEditing}
+                disabled={!onAbilityScoresChange}
+                onChange={(event) => setIsAbilityEditing(event.target.checked)}
+              />
+            )}
+          />
+        </Box>
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 1 }}>
+          {ABILITIES.map(({ key, name, abbreviation }) => (
+            <Paper key={key} variant="outlined" sx={{ p: 1, textAlign: 'center' }}>
+              <Typography variant="caption" color="text.secondary">
+                {abbreviation}
+              </Typography>
+              {isAbilityEditing ? (
+                <TextField
+                  aria-label={name}
+                  type="number"
+                  value={totalScores[key]}
+                  onChange={(event) => {
+                    const value = Number(event.target.value);
+                    if (!Number.isFinite(value)) return;
+                    const racialBonus = totalScores[key] - abilityScores[key];
+                    onAbilityScoresChange?.({
+                      ...abilityScores,
+                      [key]: Math.max(1, Math.min(30 - racialBonus, value - racialBonus)),
+                    });
+                  }}
+                  slotProps={{ htmlInput: { min: 1, max: 30, step: 1 } }}
+                  size="small"
+                  sx={{ mt: 0.5, maxWidth: 88 }}
+                />
+              ) : (
+                <Typography variant="h5">{totalScores[key]}</Typography>
+              )}
+              <Typography color="secondary.main">{formatModifier(totalScores[key])}</Typography>
+              <Typography variant="caption" color="text.secondary">
+                {name}
+              </Typography>
+            </Paper>
+          ))}
+        </Box>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))' }, gap: 1, mt: 2 }}>
+          <Typography>КД: <strong>{armorClass}</strong></Typography>
+          <Typography>Инициатива: <strong>{formatModifier(totalScores.dex)}</strong></Typography>
+          <Typography>Бонус мастерства: <strong>+{proficiencyBonus}</strong></Typography>
         </Box>
         {!characterName.trim() && (
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
@@ -1009,7 +1348,7 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
         {saveError && <Alert severity="error" sx={{ mt: 2 }}>{saveError}</Alert>}
         {savedCharacterId && (
           <Alert severity="success" sx={{ mt: 2 }}>
-            Персонаж создан. Идентификатор: {savedCharacterId}
+            {characterId ? 'Изменения сохранены.' : 'Персонаж создан.'} Идентификатор: {savedCharacterId}
           </Alert>
         )}
       </Paper>
@@ -1022,6 +1361,330 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
         </Tabs>
       </Paper>
       <Box role="tabpanel">{tabPanels[tab]}</Box>
+      <Dialog
+        open={pendingLevel !== null}
+        onClose={() => {
+          setPendingLevel(null);
+          resetPendingLevelChoices();
+        }}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>Повышение до {pendingLevel}-го уровня</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary">
+            Проверьте особенности, которые открываются на новом уровне, и подтвердите повышение.
+          </Typography>
+          {nextLevelInfo && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle2">
+                Класс: {characterClass.name}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Бонус мастерства: +{nextLevelInfo.proficiency_bonus}
+                {nextLevelInfo.cantrips_known !== undefined && ` · Заговоров: ${nextLevelInfo.cantrips_known}`}
+                {nextLevelInfo.spells_known !== undefined && ` · Заклинаний: ${nextLevelInfo.spells_known}`}
+              </Typography>
+              {nextLevelInfo.features.length > 0 && (
+                <List dense disablePadding sx={{ mt: 1 }}>
+                  {nextLevelInfo.features.map((feature) => (
+                    <ListItem key={feature} disableGutters>
+                      <ListItemText primary={feature} />
+                    </ListItem>
+                  ))}
+                </List>
+              )}
+            </Box>
+          )}
+          {nextClassFeatures.length > 0 && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle2">Новые особенности класса</Typography>
+              <List dense disablePadding>
+                {nextClassFeatures.map((feature) => (
+                  <ListItem key={feature.id} disableGutters alignItems="flex-start">
+                    <ListItemText primary={feature.name} secondary={feature.description} />
+                  </ListItem>
+                ))}
+              </List>
+            </Box>
+          )}
+          {nextFeatureImprovements.length > 0 && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle2">Улучшения особенностей</Typography>
+              <List dense disablePadding>
+                {nextFeatureImprovements.map((feature) => (
+                  <ListItem key={`${feature.name}-${feature.description}`} disableGutters alignItems="flex-start">
+                    <ListItemText primary={feature.name} secondary={feature.description} />
+                  </ListItem>
+                ))}
+              </List>
+            </Box>
+          )}
+          {nextSubclassFeatures.length > 0 && selectedSubclass && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle2">Подкласс: {selectedSubclass.name}</Typography>
+              <List dense disablePadding>
+                {nextSubclassFeatures.map((feature) => (
+                  <ListItem key={feature.name} disableGutters alignItems="flex-start">
+                    <ListItemText primary={feature.name} secondary={feature.description} />
+                  </ListItem>
+                ))}
+              </List>
+            </Box>
+          )}
+          {requiresSubclassSelection && pendingLevel !== null && (
+            <Box sx={{ mt: 2 }}>
+              <SubclassSelection
+                subclasses={characterClass.subclasses}
+                selectedSubclass={pendingSubclassId}
+                currentLevel={pendingLevel}
+                onChange={setPendingSubclassId}
+              />
+            </Box>
+          )}
+          {(requiresCantripSelection || requiresSpellSelection) && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle2">Выбор новых заклинаний</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                На этом уровне необходимо выбрать новые заклинания класса.
+              </Typography>
+              {levelSpellsLoading && (
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
+                  Загрузка доступных заклинаний…
+                </Typography>
+              )}
+              {levelSpellsError && <Alert severity="error" sx={{ mt: 1.5 }}>{levelSpellsError}</Alert>}
+              {requiresCantripSelection && !levelSpellsLoading && !levelSpellsError && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="subtitle2">
+                    Заговоры: {pendingCantrips.length}/{cantripsToChooseAtNextLevel}
+                  </Typography>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 1, mt: 1 }}>
+                    {availableCantrips.map((spell) => {
+                      const selected = pendingCantrips.some((item) => item._id === spell._id);
+                      const disabled = !selected && pendingCantrips.length >= cantripsToChooseAtNextLevel;
+                      return (
+                        <Card
+                          key={spell._id}
+                          variant="outlined"
+                          onClick={() => {
+                            if (disabled) return;
+                            setPendingCantrips((spells) => (
+                              selected
+                                ? spells.filter((item) => item._id !== spell._id)
+                                : [...spells, spell]
+                            ));
+                          }}
+                          sx={{
+                            p: 1.5,
+                            cursor: disabled ? 'not-allowed' : 'pointer',
+                            opacity: disabled ? 0.55 : 1,
+                            borderColor: selected ? 'primary.main' : undefined,
+                          }}
+                        >
+                          <Typography variant="subtitle2">{spell.name}</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {spell.school} · {spell.damage_dice ?? 'без урона'}
+                          </Typography>
+                        </Card>
+                      );
+                    })}
+                  </Box>
+                </Box>
+              )}
+              {requiresSpellSelection && !levelSpellsLoading && !levelSpellsError && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="subtitle2">
+                    Заклинания: {pendingSpells.length}/{spellsToChooseAtNextLevel}
+                  </Typography>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 1, mt: 1 }}>
+                    {availableSpells.map((spell) => {
+                      const selected = pendingSpells.some((item) => item._id === spell._id);
+                      const disabled = !selected && pendingSpells.length >= spellsToChooseAtNextLevel;
+                      return (
+                        <Card
+                          key={spell._id}
+                          variant="outlined"
+                          onClick={() => {
+                            if (disabled) return;
+                            setPendingSpells((spells) => (
+                              selected
+                                ? spells.filter((item) => item._id !== spell._id)
+                                : [...spells, spell]
+                            ));
+                          }}
+                          sx={{
+                            p: 1.5,
+                            cursor: disabled ? 'not-allowed' : 'pointer',
+                            opacity: disabled ? 0.55 : 1,
+                            borderColor: selected ? 'primary.main' : undefined,
+                          }}
+                        >
+                          <Typography variant="subtitle2">{spell.name}</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {spell.level}-й уровень · {spell.school} · {spell.damage_dice ?? 'без урона'}
+                          </Typography>
+                        </Card>
+                      );
+                    })}
+                  </Box>
+                </Box>
+              )}
+            </Box>
+          )}
+          {requiresAdvancementChoice && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle2">Увеличение характеристики или черта</Typography>
+              <Box sx={{ display: 'flex', gap: 1, mt: 1, mb: 1.5 }}>
+                <Button
+                  variant={advancementChoice === 'ability' ? 'contained' : 'outlined'}
+                  onClick={() => setAdvancementChoice('ability')}
+                >
+                  Характеристика +2
+                </Button>
+                <Button
+                  variant={advancementChoice === 'feat' ? 'contained' : 'outlined'}
+                  onClick={() => setAdvancementChoice('feat')}
+                >
+                  Выбрать черту
+                </Button>
+              </Box>
+              {advancementChoice === 'ability' ? (
+                <FormControl fullWidth required>
+                  <InputLabel id="ability-score-increase-label">Улучшение характеристики</InputLabel>
+                  <Select
+                    labelId="ability-score-increase-label"
+                    label="Улучшение характеристики"
+                    value={abilityScoreIncrease}
+                    onChange={(event) => setAbilityScoreIncrease(event.target.value as AbilityKey)}
+                  >
+                    {ABILITIES.map(({ key, name }) => (
+                      <MenuItem key={key} value={key} disabled={abilityScores[key] >= 20}>
+                        {name} +2 ({abilityScores[key]} → {Math.min(20, abilityScores[key] + 2)})
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              ) : (
+                <FormControl fullWidth required>
+                  <InputLabel id="feat-selection-label">Черта</InputLabel>
+                  <Select
+                    labelId="feat-selection-label"
+                    label="Черта"
+                    value={pendingFeatId}
+                    onChange={(event) => setPendingFeatId(event.target.value)}
+                    disabled={featsLoading}
+                  >
+                    {feats.map((feat) => (
+                      <MenuItem key={feat._id} value={feat._id} disabled={featIds.includes(feat._id)}>
+                        {feat.name}{feat.prerequisite ? ` — ${feat.prerequisite}` : ''}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                  {pendingFeatId && (
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75 }}>
+                      {feats.find((feat) => feat._id === pendingFeatId)?.description}
+                    </Typography>
+                  )}
+                </FormControl>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setPendingLevel(null);
+              resetPendingLevelChoices();
+            }}
+          >
+            Отмена
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleConfirmLevelUp}
+            disabled={
+              (requiresAdvancementChoice && advancementChoice === 'ability' && !abilityScoreIncrease)
+              || (requiresAdvancementChoice && advancementChoice === 'feat' && !pendingFeatId)
+              || (requiresSubclassSelection && !pendingSubclassId)
+              || (requiresCantripSelection && pendingCantrips.length !== cantripsToChooseAtNextLevel)
+              || (requiresSpellSelection && pendingSpells.length !== spellsToChooseAtNextLevel)
+              || levelSpellsLoading
+              || Boolean(levelSpellsError)
+            }
+          >
+            Подтвердить уровень
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog
+        open={isInventoryDialogOpen}
+        onClose={() => setIsInventoryDialogOpen(false)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>Добавление предмета</DialogTitle>
+        <DialogContent dividers>
+          <TextField
+            autoFocus
+            label="Поиск по названию"
+            value={inventorySearchQuery}
+            onChange={(event) => setInventorySearchQuery(event.target.value)}
+            fullWidth
+          />
+          {inventorySearchQuery.trim().length < 2 && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+              Введите не менее двух символов, чтобы найти предметы во всём справочнике.
+            </Typography>
+          )}
+          {inventorySearchLoading && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+              Поиск предметов…
+            </Typography>
+          )}
+          {inventorySearchError && <Alert severity="error" sx={{ mt: 2 }}>{inventorySearchError}</Alert>}
+          {!inventorySearchLoading && inventorySearchQuery.trim().length >= 2 && !inventorySearchError && (
+            inventorySearchResults.length > 0 ? (
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+                  gap: 2,
+                  mt: 2,
+                }}
+              >
+                {inventorySearchResults.map((item) => {
+                  const entry = getInventoryEntryFromSearchItem(item, 1, 1, item.name);
+                  return (
+                    <Card key={item._id} variant="outlined">
+                      <CardContent>
+                        <Typography variant="h6">{entry.name}</Typography>
+                        <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', my: 1 }}>
+                          <Chip label={entry.type} size="small" variant="outlined" />
+                          {entry.weight && <Chip label={`${entry.weight} фнт.`} size="small" color="secondary" />}
+                        </Box>
+                        <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-line' }}>
+                          {entry.details}
+                        </Typography>
+                        <Button size="small" variant="contained" sx={{ mt: 2 }} onClick={() => addCustomInventoryItem(item)}>
+                          Добавить
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </Box>
+            ) : (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                По этому названию ничего не найдено.
+              </Typography>
+            )
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setIsInventoryDialogOpen(false)}>Готово</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 });

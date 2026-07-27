@@ -9,6 +9,8 @@ export interface CharacterEquipmentItem {
 export interface CreateCharacterPayload {
   name: string;
   level: number;
+  experience?: number;
+  feat_ids?: string[];
   hit_points: {
     current: number;
     maximum: number;
@@ -38,6 +40,8 @@ export interface CreateCharacterPayload {
     fixed_equipment: CharacterEquipmentItem[];
     selected_equipment: string[][];
     instruments: string[];
+    custom_equipment?: CharacterEquipmentItem[];
+    removed_equipment?: CharacterEquipmentItem[];
   };
   spells: {
     cantrip_ids: string[];

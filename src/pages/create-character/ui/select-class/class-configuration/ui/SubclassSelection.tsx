@@ -50,9 +50,11 @@ export const SubclassSelection = ({
         достижения требуемого уровня.
       </Typography>
 
-      <Stack
-        spacing={2}
+      <Box
         sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
+          gap: 2,
           maxHeight: { xs: '68vh', sm: '76vh' },
           overflowY: 'auto',
           pr: 1,
@@ -203,7 +205,7 @@ export const SubclassSelection = ({
             </Card>
           );
         })}
-      </Stack>
+      </Box>
     </Box>
   );
 };

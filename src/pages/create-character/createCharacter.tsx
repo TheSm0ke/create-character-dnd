@@ -26,7 +26,7 @@ import {
   isSkillSelectionValid,
   type AbilityScores,
 } from "./ui/select-abilities";
-import type { Race, Class, Background, Alignment, Language } from "../../api";
+import type { Race, Class, Background, Alignment, CharacterEquipmentItem, Language } from "../../api";
 import { getBackgroundLanguageChoiceCount } from "./ui/select-background/languageChoices";
 import { NavigationMenu } from "../../components/NavigationMenu";
 
@@ -51,7 +51,12 @@ const CreateCharacter = () => {
   const [selectedBackgroundLanguages, setSelectedBackgroundLanguages] = useState<string[]>([]);
   const [selectedAlignment, setSelectedAlignment] = useState<Alignment | null>(null);
   const [characterName, setCharacterName] = useState("");
+  const [experience, setExperience] = useState(0);
+  const [featIds, setFeatIds] = useState<string[]>([]);
   const [currentHitPoints, setCurrentHitPoints] = useState<number | null>(null);
+  const [characterLevel, setCharacterLevel] = useState(1);
+  const [customEquipment, setCustomEquipment] = useState<CharacterEquipmentItem[]>([]);
+  const [removedEquipment, setRemovedEquipment] = useState<CharacterEquipmentItem[]>([]);
   const [selectedPersonality, setSelectedPersonality] = useState<{
     traits: string[];
     ideals: string[];
@@ -109,7 +114,7 @@ const CreateCharacter = () => {
     }
     if (activeStep === 5 && !selectedAlignment) return;
     if (activeStep === steps.length - 1) {
-      await characterSheetRef.current?.createCharacter();
+      await characterSheetRef.current?.saveCharacter();
       return;
     }
 
@@ -296,9 +301,21 @@ const CreateCharacter = () => {
               classConfiguration={classConfiguration}
               selectedBackgroundLanguages={selectedBackgroundLanguages}
               characterName={characterName}
+              experience={experience}
+              featIds={featIds}
               currentHitPoints={currentHitPoints}
+              characterLevel={characterLevel}
               onCharacterNameChange={setCharacterName}
+              onExperienceChange={setExperience}
+              onFeatIdsChange={setFeatIds}
               onCurrentHitPointsChange={setCurrentHitPoints}
+              onCharacterLevelChange={setCharacterLevel}
+              onAbilityScoresChange={setAbilityScores}
+              onClassConfigurationChange={setClassConfiguration}
+              customEquipment={customEquipment}
+              removedEquipment={removedEquipment}
+              onCustomEquipmentChange={setCustomEquipment}
+              onRemovedEquipmentChange={setRemovedEquipment}
             />
           )}
       </Box>
