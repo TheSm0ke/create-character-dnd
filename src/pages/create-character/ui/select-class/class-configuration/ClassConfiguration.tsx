@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Box, Typography, useTheme, Button } from '@mui/material';
+import { Box, Typography, useTheme } from '@mui/material';
 import type { SelectChangeEvent } from '@mui/material';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { fetchSpellsByClassAndLevel, type Class, type Spell } from '../../../../../api';
 import { useFetch } from '../../../../../api/useFetch';
 import { SelectSkills } from '../selectedSkills';
@@ -20,25 +20,23 @@ import { getSubclassUnlockLevel } from './subclassUtils';
 
 interface ClassConfigurationProps {
   classData: Class;
-  onConfirm: (config: {
+  onConfigurationChange: (config: {
     skills: string[];
     equipment: string[][];
     subclass?: string;
     instruments?: string[];
     cantrips: Spell[];
     spells1: Spell[];
-  }) => void;
+  } | null) => void;
   selectSkills?: boolean;
   characterLevel?: number;
-  onBack: () => void;
 }
 
 export const ClassConfiguration = ({
   classData,
-  onConfirm,
+  onConfigurationChange,
   selectSkills = true,
   characterLevel = 1,
-  onBack,
 }: ClassConfigurationProps) => {
   const theme = useTheme();
   const { proficiencies, subclasses, spellcasting, name, fixed_equipment, choices } = classData;
@@ -187,7 +185,7 @@ export const ClassConfiguration = ({
     return true;
   };
 
-  const handleConfirm = () => {
+  const getConfiguration = () => {
     const equipment = choices.map((choice, idx) => {
       const selection = selectedEquipment[idx];
       if (!selection) return [];
@@ -223,15 +221,35 @@ export const ClassConfiguration = ({
         return option.map((item: any) => item.name);
       }
     });
-    onConfirm({
+    return {
       skills: selectSkills ? selectedSkills : [],
       equipment,
       subclass: availableSubclasses.length > 0 ? selectedSubclass : undefined,
       instruments: instrumentCount > 0 ? selectedInstruments : undefined,
       cantrips: selectedCantrips,
       spells1: selectedSpells1,
-    });
+    };
   };
+
+  const configuration = allSelected() ? getConfiguration() : null;
+  const configurationSignature = configuration
+    ? JSON.stringify({
+      skills: configuration.skills,
+      equipment: configuration.equipment,
+      subclass: configuration.subclass,
+      instruments: configuration.instruments,
+      cantrips: configuration.cantrips.map((spell) => spell._id),
+      spells1: configuration.spells1.map((spell) => spell._id),
+    })
+    : null;
+  const lastConfigurationSignature = useRef<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (lastConfigurationSignature.current === configurationSignature) return;
+
+    lastConfigurationSignature.current = configurationSignature;
+    onConfigurationChange(configuration);
+  }, [configuration, configurationSignature, onConfigurationChange]);
 
   return (
     <Box sx={{ p: 2, maxWidth: '100%', boxSizing: 'border-box' }}>
@@ -319,12 +337,6 @@ export const ClassConfiguration = ({
         />
       )}
 
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
-        <Button variant="outlined" onClick={onBack}>Назад</Button>
-        <Button variant="contained" color="primary" onClick={handleConfirm} disabled={!allSelected()}>
-          Подтвердить
-        </Button>
-      </Box>
     </Box>
   );
 };

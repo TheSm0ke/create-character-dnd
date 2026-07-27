@@ -1,13 +1,40 @@
 import { useState } from 'react';
 import { alpha, useTheme } from '@mui/material/styles';
-import { Box, Typography, Button, Chip, Divider, useMediaQuery } from '@mui/material';
+import { Box, Typography, Chip, Divider, TextField, useMediaQuery } from '@mui/material';
 import type { Class } from '../../../../api';
+import barbarianBackground from '../../../../assets/class-icons/barbarian.webp';
+import bardBackground from '../../../../assets/class-icons/bard.webp';
+import clericBackground from '../../../../assets/class-icons/cleric.webp';
+import druidBackground from '../../../../assets/class-icons/druid.webp';
+import fighterBackground from '../../../../assets/class-icons/fighter.webp';
+import monkBackground from '../../../../assets/class-icons/monk.webp';
+import paladinBackground from '../../../../assets/class-icons/paladin.webp';
+import rangerBackground from '../../../../assets/class-icons/ranger.webp';
+import rogueBackground from '../../../../assets/class-icons/rogue.webp';
+import sorcererBackground from '../../../../assets/class-icons/sorcerer.webp';
+import warlockBackground from '../../../../assets/class-icons/warlock.webp';
+import wizardBackground from '../../../../assets/class-icons/wizard.webp';
 import { ClassHeading } from './ClassHeading';
 import { hasSpellcasting } from './spellcastingUtils';
 
 // ==============================
 // Карточка одного класса
 // ==============================
+const CLASS_BACKGROUND_IMAGES: Record<string, string> = {
+  'Бард': bardBackground,
+  'Варвар': barbarianBackground,
+  'Воин': fighterBackground,
+  'Волшебник': wizardBackground,
+  'Чародей': sorcererBackground,
+  'Следопыт': rangerBackground,
+  'Плут': rogueBackground,
+  'Паладин': paladinBackground,
+  'Монах': monkBackground,
+  'Колдун': warlockBackground,
+  'Жрец': clericBackground,
+  'Друид': druidBackground,
+};
+
 const ClassCard = ({
   classData,
   selected,
@@ -37,6 +64,7 @@ const ClassCard = ({
 
   const handleClick = () => onSelect();
   const isSpellcaster = hasSpellcasting(spellcasting);
+  const backgroundImage = CLASS_BACKGROUND_IMAGES[name];
 
   const sortedLevels = [...levels].sort((a, b) => a.level - b.level);
   const firstLevels = sortedLevels.slice(0, 3);
@@ -62,6 +90,7 @@ const ClassCard = ({
         margin: 0,
         textAlign: 'left',
         position: 'relative',
+        isolation: 'isolate',
         overflow: 'hidden',
         transition: 'transform 0.25s ease, border-color 0.3s ease, background-color 0.3s ease',
         transform: selected ? 'scale(1.02)' : hover ? 'scale(1.01)' : 'scale(1)',
@@ -84,6 +113,20 @@ const ClassCard = ({
           background: theme.palette.primary.main,
           borderRadius: 4,
         },
+        '&::before': backgroundImage ? {
+          content: '""',
+          position: 'absolute',
+          inset: 0,
+          zIndex: 0,
+          backgroundImage: `url("${backgroundImage}")`,
+          backgroundPosition: 'right 16px bottom 16px',
+          backgroundRepeat: 'no-repeat',
+          backgroundSize: 'min(52%, 180px)',
+          filter: 'drop-shadow(0 0 12px currentColor)',
+          opacity: selected ? 0.32 : hover ? 0.25 : 0.18,
+          transition: 'opacity 0.3s ease',
+          pointerEvents: 'none',
+        } : undefined,
       }}
     >
       {/* Заголовок */}
@@ -329,11 +372,15 @@ interface ClassListProps {
   classes: Class[];
   selectedClass: Class | null;
   onSelect: (cls: Class) => void;
-  onBack: () => void;
 }
 
-export const ClassList = ({ classes, selectedClass, onSelect, onBack }: ClassListProps) => {
+export const ClassList = ({ classes, selectedClass, onSelect }: ClassListProps) => {
   const theme = useTheme();
+  const [searchQuery, setSearchQuery] = useState('');
+  const normalizedSearchQuery = searchQuery.trim().toLocaleLowerCase('ru-RU');
+  const filteredClasses = classes.filter((classData) => (
+    classData.name.toLocaleLowerCase('ru-RU').includes(normalizedSearchQuery)
+  ));
 
   return (
     <Box sx={{ p: 2 }}>
@@ -349,6 +396,14 @@ export const ClassList = ({ classes, selectedClass, onSelect, onBack }: ClassLis
       >
         Выберите класс
       </Typography>
+      <TextField
+        fullWidth
+        label="Поиск класса"
+        placeholder="Введите название класса"
+        value={searchQuery}
+        onChange={(event) => setSearchQuery(event.target.value)}
+        sx={{ mb: 2.5 }}
+      />
       <Box
         sx={{
           display: 'grid',
@@ -361,7 +416,7 @@ export const ClassList = ({ classes, selectedClass, onSelect, onBack }: ClassLis
           alignItems: 'stretch',
         }}
       >
-        {classes.map((cls) => (
+        {filteredClasses.map((cls) => (
           <Box
             key={cls._id}
             sx={{ minWidth: 0 }}
@@ -374,9 +429,11 @@ export const ClassList = ({ classes, selectedClass, onSelect, onBack }: ClassLis
           </Box>
         ))}
       </Box>
-      <Box sx={{ display: 'flex', justifyContent: 'flex-start', mt: 3 }}>
-        <Button variant="outlined" onClick={onBack}>Назад</Button>
-      </Box>
+      {filteredClasses.length === 0 && (
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+          Классы с таким названием не найдены.
+        </Typography>
+      )}
     </Box>
   );
 };

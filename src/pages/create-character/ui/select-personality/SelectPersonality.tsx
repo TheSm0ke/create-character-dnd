@@ -1,4 +1,4 @@
-import { Box, Typography, useTheme, Paper, useMediaQuery, Button } from '@mui/material';
+import { Box, Typography, useTheme, Paper, useMediaQuery } from '@mui/material';
 import { useState } from 'react';
 
 interface Personality {
@@ -10,7 +10,7 @@ interface Personality {
 
 interface SelectPersonalityProps {
   personality: Personality;
-  onConfirm: (selected: { traits: string[]; ideals: string[]; bonds: string[]; flaws: string[] }) => void;
+  onConfirm: (selected: { traits: string[]; ideals: string[]; bonds: string[]; flaws: string[] } | null) => void;
 }
 
 const PersonalityCard = ({ label, selected, onToggle }: { label: string; selected: boolean; onToggle: () => void }) => {
@@ -51,25 +51,38 @@ export const SelectPersonality = ({ personality, onConfirm }: SelectPersonalityP
   const [selectedBonds, setSelectedBonds] = useState<string[]>([]);
   const [selectedFlaws, setSelectedFlaws] = useState<string[]>([]);
 
-  const handleToggle = (list: string[], setList: (v: string[]) => void, max: number, value: string) => {
-    if (list.includes(value)) {
-      setList(list.filter(v => v !== value));
-    } else if (list.length < max) {
-      setList([...list, value]);
-    }
+  const toggleValue = (list: string[], max: number, value: string) => {
+    if (list.includes(value)) return list.filter((item) => item !== value);
+    return list.length < max ? [...list, value] : list;
   };
 
-  const isComplete = selectedTraits.length >= 2 && selectedIdeals.length >= 1 && selectedBonds.length >= 1 && selectedFlaws.length >= 1;
+  const notifySelection = (traits: string[], ideals: string[], bonds: string[], flaws: string[]) => {
+    const isComplete = traits.length >= 2 && ideals.length >= 1 && bonds.length >= 1 && flaws.length >= 1;
+    onConfirm(isComplete ? { traits, ideals, bonds, flaws } : null);
+  };
 
-  const handleConfirm = () => {
-    if (isComplete) {
-      onConfirm({
-        traits: selectedTraits,
-        ideals: selectedIdeals,
-        bonds: selectedBonds,
-        flaws: selectedFlaws,
-      });
-    }
+  const handleTraitsToggle = (value: string) => {
+    const nextTraits = toggleValue(selectedTraits, 2, value);
+    setSelectedTraits(nextTraits);
+    notifySelection(nextTraits, selectedIdeals, selectedBonds, selectedFlaws);
+  };
+
+  const handleIdealsToggle = (value: string) => {
+    const nextIdeals = toggleValue(selectedIdeals, 1, value);
+    setSelectedIdeals(nextIdeals);
+    notifySelection(selectedTraits, nextIdeals, selectedBonds, selectedFlaws);
+  };
+
+  const handleBondsToggle = (value: string) => {
+    const nextBonds = toggleValue(selectedBonds, 1, value);
+    setSelectedBonds(nextBonds);
+    notifySelection(selectedTraits, selectedIdeals, nextBonds, selectedFlaws);
+  };
+
+  const handleFlawsToggle = (value: string) => {
+    const nextFlaws = toggleValue(selectedFlaws, 1, value);
+    setSelectedFlaws(nextFlaws);
+    notifySelection(selectedTraits, selectedIdeals, selectedBonds, nextFlaws);
   };
 
   const getTraitsColumns = () => {
@@ -105,7 +118,7 @@ export const SelectPersonality = ({ personality, onConfirm }: SelectPersonalityP
               key={trait}
               label={trait}
               selected={selectedTraits.includes(trait)}
-              onToggle={() => handleToggle(selectedTraits, setSelectedTraits, 2, trait)}
+              onToggle={() => handleTraitsToggle(trait)}
             />
           ))}
         </Box>
@@ -127,7 +140,7 @@ export const SelectPersonality = ({ personality, onConfirm }: SelectPersonalityP
               key={ideal}
               label={ideal}
               selected={selectedIdeals.includes(ideal)}
-              onToggle={() => handleToggle(selectedIdeals, setSelectedIdeals, 1, ideal)}
+              onToggle={() => handleIdealsToggle(ideal)}
             />
           ))}
         </Box>
@@ -149,7 +162,7 @@ export const SelectPersonality = ({ personality, onConfirm }: SelectPersonalityP
               key={bond}
               label={bond}
               selected={selectedBonds.includes(bond)}
-              onToggle={() => handleToggle(selectedBonds, setSelectedBonds, 1, bond)}
+              onToggle={() => handleBondsToggle(bond)}
             />
           ))}
         </Box>
@@ -171,24 +184,12 @@ export const SelectPersonality = ({ personality, onConfirm }: SelectPersonalityP
               key={flaw}
               label={flaw}
               selected={selectedFlaws.includes(flaw)}
-              onToggle={() => handleToggle(selectedFlaws, setSelectedFlaws, 1, flaw)}
+              onToggle={() => handleFlawsToggle(flaw)}
             />
           ))}
         </Box>
       </Box>
 
-      {/* Кнопка подтверждения */}
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={handleConfirm}
-          disabled={!isComplete}
-          sx={{ minWidth: 150 }}
-        >
-          Подтвердить
-        </Button>
-      </Box>
     </Box>
   );
 };

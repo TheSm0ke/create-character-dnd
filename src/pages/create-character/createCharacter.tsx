@@ -236,8 +236,8 @@ const CreateCharacter = () => {
           <ClassSelection
             classes={classes || []}
             onSelect={handleSelectClass}
+            onConfigurationChange={setClassConfiguration}
             onConfigurationStart={handleClassConfigurationStart}
-            onBack={handleBack}
           />
         )}
         {activeStep === 2 && (
@@ -301,7 +301,20 @@ const CreateCharacter = () => {
           )}
       </Box>
 
-      <Box sx={{ display: "flex", justifyContent: "space-between", p: 2 }}>
+      <Box
+        sx={{
+          position: "sticky",
+          bottom: 0,
+          zIndex: 10,
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 2,
+          p: 2,
+          borderTop: "1px solid",
+          borderColor: "divider",
+          backgroundColor: "background.default",
+        }}
+      >
         <Button
           variant="outlined"
           onClick={handleBack}
@@ -315,7 +328,7 @@ const CreateCharacter = () => {
           onClick={handleNext}
           disabled={!isStepValid()}
         >
-          {activeStep === steps.length - 1 ? "Завершить" : "Далее"}
+          {activeStep === steps.length - 1 ? "Сохранить" : "Далее"}
         </Button>
       </Box>
     </Box>

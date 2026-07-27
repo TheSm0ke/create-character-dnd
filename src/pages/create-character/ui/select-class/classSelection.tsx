@@ -15,15 +15,15 @@ export interface ClassConfiguration {
 interface ClassSelectionProps {
   classes: Class[];
   onSelect: (classData: Class, config: ClassConfiguration) => void;
+  onConfigurationChange: (config: ClassConfiguration | null) => void;
   onConfigurationStart: () => void;
-  onBack: () => void;
 }
 
 export const ClassSelection = ({
   classes,
   onSelect,
+  onConfigurationChange,
   onConfigurationStart,
-  onBack,
 }: ClassSelectionProps) => {
   const [selectedClass, setSelectedClass] = useState<Class | null>(null);
 
@@ -32,10 +32,9 @@ export const ClassSelection = ({
     setSelectedClass(classData);
   };
 
-  const handleConfirm = (config: ClassConfiguration) => {
-    if (selectedClass) {
-      onSelect(selectedClass, config);
-    }
+  const handleConfigurationChange = (config: ClassConfiguration | null) => {
+    onConfigurationChange(config);
+    if (selectedClass && config) onSelect(selectedClass, config);
   };
 
   if (!selectedClass) {
@@ -44,7 +43,6 @@ export const ClassSelection = ({
         classes={classes}
         selectedClass={selectedClass}
         onSelect={handleClassSelect}
-        onBack={onBack}
       />
     );
   }
@@ -52,9 +50,8 @@ export const ClassSelection = ({
   return (
     <ClassConfiguration
       classData={selectedClass}
-      onConfirm={handleConfirm}
+      onConfigurationChange={handleConfigurationChange}
       selectSkills={false}
-      onBack={() => setSelectedClass(null)}
     />
   );
 };
