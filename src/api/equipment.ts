@@ -28,6 +28,32 @@ export type EquipmentSearchResponse = {
   data: Weapon | Armor | Item | Tool | PackData | (Weapon | Armor | Item | Tool)[];
 };
 
+export const fetchEquipmentDetails = async (
+  query: string,
+): Promise<{
+  type: EquipmentType;
+  data: Weapon | Armor | Item | Tool | null;
+} | null> => {
+  const response = await get<EquipmentSearchResponse | EquipmentSearchResponse[]>(
+    `/equipment/search?q=${encodeURIComponent(query)}`,
+  );
+  const entry = Array.isArray(response) ? response[0] : response;
+
+  if (!entry) {
+    return null;
+  }
+
+  if (Array.isArray(entry.data)) {
+    return { type: entry.type, data: entry.data[0] ?? null };
+  }
+
+  if (entry.type === 'pack') {
+    return { type: entry.type, data: null };
+  }
+
+  return { type: entry.type, data: entry.data as Weapon | Armor | Item | Tool };
+};
+
 export const searchEquipment = async (
   query: string
 ): Promise<{ items: (Weapon | Armor | Item | Tool)[]; isPack: boolean }> => {

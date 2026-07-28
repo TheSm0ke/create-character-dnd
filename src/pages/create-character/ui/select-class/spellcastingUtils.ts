@@ -1,6 +1,6 @@
 import type { Spellcasting } from "../../../../api";
 
-export const hasSpellcasting = (spellcasting?: Spellcasting) =>
+export const hasSpellcasting = (spellcasting?: Spellcasting): spellcasting is Spellcasting =>
   Boolean(
     spellcasting?.ability &&
       (spellcasting.cantrips_known_progression?.some((count) => count > 0) ||

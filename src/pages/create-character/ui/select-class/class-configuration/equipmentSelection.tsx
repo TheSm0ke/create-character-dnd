@@ -1,7 +1,6 @@
 // src/pages/create-character/ui/select-class/class-configuration/equipmentSelection.tsx
 import { Box, Typography, useTheme } from '@mui/material';
 import type { EquipmentItem, EquipmentChoice } from '../../../../../api/classes';
-import { EquipmentOptionCard } from './equipmentOptionCard';
 
 interface Props {
   fixedEquipment: EquipmentItem[];
@@ -42,12 +41,33 @@ export const EquipmentSelection = ({
           </Typography>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, mt: 1 }}>
             {choice.options.map((option, optIdx) => (
-              <Box key={optIdx} sx={{ width: { xs: '100%', sm: 'calc(50% - 8px)', md: 'calc(33.33% - 10px)' } }}>
-                <EquipmentOptionCard
-                  items={option}
-                  selected={selected[idx] === optIdx}
-                  onToggle={() => onChange(idx, optIdx)}
-                />
+              <Box
+                key={optIdx}
+                role="button"
+                tabIndex={0}
+                onClick={() => onChange(idx, optIdx)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    onChange(idx, optIdx);
+                  }
+                }}
+                sx={{
+                  width: { xs: '100%', sm: 'calc(50% - 8px)', md: 'calc(33.33% - 10px)' },
+                  p: 2,
+                  border: '2px solid',
+                  borderColor: selected[idx] === optIdx ? 'primary.main' : 'divider',
+                  borderRadius: 2,
+                  cursor: 'pointer',
+                  bgcolor: selected[idx] === optIdx ? 'action.selected' : 'background.paper',
+                  '&:hover': { borderColor: 'primary.light' },
+                }}
+              >
+                <Typography variant="body2">
+                  {option
+                    .map((item) => `${item.name}${item.count > 1 ? ` (×${item.count})` : ''}`)
+                    .join(', ')}
+                </Typography>
               </Box>
             ))}
           </Box>

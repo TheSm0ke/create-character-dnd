@@ -54,7 +54,7 @@ export const SubclassSpellsCard = ({ spellProgression }: SubclassSpellsCardProps
           </Select>
         </FormControl>
 
-        <Stack direction="row" flexWrap="wrap" gap={1}>
+        <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
           {selectedSpells.map((spell) => (
             <Chip key={spell} label={spell} color="secondary" variant="outlined" />
           ))}
