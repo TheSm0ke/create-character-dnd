@@ -1,4 +1,5 @@
-const BASE_URL = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
+const configuredBaseUrl = import.meta.env.VITE_API_URL || '/api';
+const BASE_URL = (import.meta.env.PROD ? '/api' : configuredBaseUrl).replace(/\/$/, '');
 
 const getErrorMessage = async (response: Response) => {
   const fallbackMessage = 'Не удалось выполнить запрос к серверу.';
