@@ -258,15 +258,26 @@ export const ClassConfiguration = ({
 
       const items = data.items || [];
       const isPack = data.isPack;
-      if (isPack || items.length > 1) {
+      if (isPack) {
         return items.map((item: any) => item.name);
-      } else {
-        const found = items.find((item: any) => item._id === selection.specificItemIds[0]);
-        if (found) return [found.name];
-        if (items.length > 0) return [items[0].name];
-        const option = choice.options[selection.optionIndex];
-        return option.map((item: any) => item.name);
       }
+
+      if (data.isComposite) {
+        return items.map((item: any) => item.name);
+      }
+
+      if (data.fixedCount && items.length === 1) {
+        return Array.from({ length: data.fixedCount }, () => items[0].name);
+      }
+
+      const selectedItems = selection.specificItemIds
+        .map((id) => items.find((item: any) => item._id === id))
+        .filter((item): item is NonNullable<typeof item> => item !== undefined);
+      if (selectedItems.length > 0) return selectedItems.map((item) => item.name);
+
+      if (items.length === 1) return [items[0].name];
+      const option = choice.options[selection.optionIndex];
+      return option.map((item: any) => item.name);
     });
     return {
       skills: selectSkills ? selectedSkills : [],
@@ -391,6 +402,9 @@ export const ClassConfiguration = ({
             damageFilter={cantripFilter.damageFilter}
             setDamageFilter={cantripFilter.setDamageFilter}
             damageTypes={cantripFilter.damageTypes}
+            damageDiceFilter={cantripFilter.damageDiceFilter}
+            setDamageDiceFilter={cantripFilter.setDamageDiceFilter}
+            damageDice={cantripFilter.damageDice}
             applyRecommended={applyRecommendedCantrips}
             clear={clearCantrips}
             loading={loading}
@@ -412,6 +426,9 @@ export const ClassConfiguration = ({
           damageFilter={spell1Filter.damageFilter}
           setDamageFilter={spell1Filter.setDamageFilter}
           damageTypes={spell1Filter.damageTypes}
+          damageDiceFilter={spell1Filter.damageDiceFilter}
+          setDamageDiceFilter={spell1Filter.setDamageDiceFilter}
+          damageDice={spell1Filter.damageDice}
           applyRecommended={applyRecommendedSpells1}
           clear={clearSpells1}
           loading={loading}

@@ -46,6 +46,8 @@ export const EquipmentChoices: React.FC<EquipmentChoicesProps> = ({
         const isLoading = selectedOptionIndex !== undefined && !loadedData;
         const isShieldOption = loadedData?.isShieldOption || false;
         const isMultiSelect = loadedData?.isMultiSelect || false;
+        const isComposite = loadedData?.isComposite || false;
+        const fixedCount = loadedData?.fixedCount || 1;
         const maxSelect = loadedData?.maxSelect || 1;
         const selectedIds = selection?.specificItemIds || [];
 
@@ -225,6 +227,28 @@ export const EquipmentChoices: React.FC<EquipmentChoicesProps> = ({
                       );
                     }
 
+                    if (isComposite) {
+                      return (
+                        <Box sx={{ mt: 1 }}>
+                          <Typography variant="caption" sx={{ color: theme.palette.text.secondary, display: 'block', mb: 0.5 }}>
+                            В комплекте:
+                          </Typography>
+                          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 1 }}>
+                            {validItems.map((item: any, itemIdx: number) => (
+                              <EquipmentItemCard
+                                key={itemIdx}
+                                item={item}
+                                type={getItemType(item)}
+                                selected={true}
+                                onSelect={() => {}}
+                                disabled={true}
+                              />
+                            ))}
+                          </Box>
+                        </Box>
+                      );
+                    }
+
                     if (validItems.length > 1) {
                       return (
                         <Box sx={{ mt: 2, p: 2, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 2 }}>
@@ -268,6 +292,7 @@ export const EquipmentChoices: React.FC<EquipmentChoicesProps> = ({
                           selected={true}
                           onSelect={() => {}}
                           disabled={true}
+                          suffix={fixedCount > 1 ? `×${fixedCount}` : undefined}
                         />
                       </Box>
                     );

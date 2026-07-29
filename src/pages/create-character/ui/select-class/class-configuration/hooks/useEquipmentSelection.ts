@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { searchEquipment } from '../../../../../../api';
 
 export interface EquipmentChoice {
@@ -19,6 +19,8 @@ export interface LoadedItemData {
   isShieldOption?: boolean;
   isMultiSelect?: boolean;
   maxSelect?: number;
+  isComposite?: boolean;
+  fixedCount?: number;
 }
 
 export function useEquipmentSelection(choices: EquipmentChoice[]) {
@@ -163,15 +165,27 @@ export function useEquipmentSelection(choices: EquipmentChoice[]) {
             else itemsResult = [data];
           }
         }
+        const isCategoryChoice = itemsResult.length > 1;
         setLoadedItems(prev => ({
           ...prev,
           [key]: {
             items: itemsResult,
             isPack: false,
-            isMultiSelect: true,
-            maxSelect: maxSelect,
+            isMultiSelect: isCategoryChoice,
+            maxSelect: isCategoryChoice ? maxSelect : undefined,
+            fixedCount: isCategoryChoice ? undefined : totalCount,
           }
         }));
+
+        if (!isCategoryChoice && itemsResult.length === 1) {
+          setSelectedEquipment(prev => ({
+            ...prev,
+            [choiceIndex]: {
+              ...prev[choiceIndex],
+              specificItemIds: [itemsResult[0]._id],
+            },
+          }));
+        }
       } catch (e) {
         console.error('Ошибка загрузки для множественного выбора:', e);
         setLoadedItems(prev => ({
@@ -179,8 +193,8 @@ export function useEquipmentSelection(choices: EquipmentChoice[]) {
           [key]: {
             items: [],
             isPack: false,
-            isMultiSelect: true,
-            maxSelect: maxSelect,
+            isMultiSelect: false,
+            fixedCount: totalCount,
           }
         }));
       }
@@ -213,13 +227,16 @@ export function useEquipmentSelection(choices: EquipmentChoice[]) {
             isPack = isPack || (data.isPack || false);
           }
         }
-        setLoadedItems(prev => ({ ...prev, [key]: { items: allItems, isPack, isMultiSelect: false } }));
-        if (allItems.length === 1) {
+        setLoadedItems(prev => ({
+          ...prev,
+          [key]: { items: allItems, isPack, isMultiSelect: false, isComposite: true },
+        }));
+        if (allItems.length > 0) {
           setSelectedEquipment(prev => ({
             ...prev,
             [choiceIndex]: {
               ...prev[choiceIndex],
-              specificItemIds: [allItems[0]._id],
+              specificItemIds: allItems.map((item: any) => item._id),
             }
           }));
         }
@@ -239,7 +256,10 @@ export function useEquipmentSelection(choices: EquipmentChoice[]) {
             };
           })
           .filter((item: any) => item !== null);
-        setLoadedItems(prev => ({ ...prev, [key]: { items, isPack: false, isMultiSelect: false } }));
+        setLoadedItems(prev => ({
+          ...prev,
+          [key]: { items, isPack: false, isMultiSelect: false, isComposite: true },
+        }));
       }
       return;
     }
@@ -297,6 +317,17 @@ export function useEquipmentSelection(choices: EquipmentChoice[]) {
     }));
     loadItemsForOption(choiceIndex, optionIndex);
   }, [loadItemsForOption]);
+
+  useEffect(() => {
+    Object.entries(selectedEquipment).forEach(([choiceIndex, selection]) => {
+      const index = Number(choiceIndex);
+      const key = `${index}-${selection.optionIndex}`;
+
+      if (!loadedItems[key]) {
+        void loadItemsForOption(index, selection.optionIndex);
+      }
+    });
+  }, [selectedEquipment, loadedItems, loadItemsForOption]);
 
   const handleSpecificItemSelect = useCallback((choiceIndex: number, itemId: string) => {
     setSelectedEquipment(prev => {

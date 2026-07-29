@@ -15,6 +15,9 @@ interface SpellSelectionProps {
   damageFilter: string | null;
   setDamageFilter: (type: string | null) => void;
   damageTypes: string[];
+  damageDiceFilter: string | null;
+  setDamageDiceFilter: (dice: string | null) => void;
+  damageDice: string[];
   applyRecommended: () => void;
   clear: () => void;
   loading: boolean;
@@ -33,6 +36,9 @@ export const SpellSelection: React.FC<SpellSelectionProps> = ({
   damageFilter,
   setDamageFilter,
   damageTypes,
+  damageDiceFilter,
+  setDamageDiceFilter,
+  damageDice,
   applyRecommended,
   clear,
   loading,
@@ -112,6 +118,29 @@ export const SpellSelection: React.FC<SpellSelectionProps> = ({
               />
             );
           })}
+        </Box>
+      )}
+
+      {!loading && damageDice.length > 0 && (
+        <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.5, mb: 1 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ mr: 0.5 }}>Урон:</Typography>
+          <Chip
+            label="Любой"
+            size="small"
+            onClick={() => setDamageDiceFilter(null)}
+            color={damageDiceFilter === null ? 'primary' : 'default'}
+            variant={damageDiceFilter === null ? 'filled' : 'outlined'}
+          />
+          {damageDice.map((dice) => (
+            <Chip
+              key={dice}
+              label={dice}
+              size="small"
+              onClick={() => setDamageDiceFilter(damageDiceFilter === dice ? null : dice)}
+              color={damageDiceFilter === dice ? 'primary' : 'default'}
+              variant={damageDiceFilter === dice ? 'filled' : 'outlined'}
+            />
+          ))}
         </Box>
       )}
 

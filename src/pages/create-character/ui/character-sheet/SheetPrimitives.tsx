@@ -176,3 +176,39 @@ export const SpellSlots = ({ slots }: { slots?: number[] }) => {
     </Box>
   );
 };
+
+export const KiPoints = ({ points }: { points: number }) => (
+  <Box aria-label={`Очки ци: ${points}`} sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, mt: 1 }}>
+    <Paper
+      variant="outlined"
+      sx={{
+        position: 'relative', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', alignItems: 'flex-end', justifyItems: 'center',
+        gap: 0.5, minWidth: 94, minHeight: 66, px: 1, pb: 1, pt: 2.5, overflow: 'visible', borderColor: 'divider',
+        backgroundColor: 'background.default', boxShadow: (theme) => `inset 0 -14px 18px ${theme.palette.action.selected}`,
+      }}
+    >
+      <Box
+        aria-hidden="true"
+        sx={{
+          position: 'absolute', top: -13, left: '50%', display: 'grid', width: 28, height: 28, placeItems: 'center',
+          transform: 'translateX(-50%)', border: '1px solid', borderColor: 'divider', borderRadius: '50%',
+          backgroundColor: 'background.paper', color: 'text.primary', fontFamily: 'serif', fontSize: '1.1rem', fontWeight: 700,
+          lineHeight: 1, boxShadow: (theme) => `0 2px 8px ${theme.palette.action.disabledBackground}`,
+        }}
+      >
+        Ц
+      </Box>
+      {Array.from({ length: points }, (_, pointIndex) => (
+        <Box
+          key={pointIndex}
+          role="img"
+          aria-label={`Очко ци ${pointIndex + 1} из ${points}: доступно`}
+          sx={{
+            width: 22, height: 22, border: '1px solid', borderColor: 'primary.light',
+            backgroundColor: 'primary.main', boxShadow: (theme) => `0 0 10px ${theme.palette.primary.main}`,
+          }}
+        />
+      ))}
+    </Paper>
+  </Box>
+);

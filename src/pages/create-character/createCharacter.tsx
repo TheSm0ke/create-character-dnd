@@ -350,6 +350,12 @@ const CreateCharacter = () => {
     return <Typography>Ошибка загрузки языков: {languagesError}</Typography>;
   }
 
+  const getStepStatus = (index: number) => {
+    if (index < activeStep) return 'Готово';
+    if (index === activeStep) return 'Текущий';
+    return 'Ожидает';
+  };
+
   return (
     <Box
       sx={{ width: "100%", display: "flex", flexDirection: "column", gap: 2 }}
@@ -373,7 +379,15 @@ const CreateCharacter = () => {
                   if (index < activeStep) setActiveStep(index);
                 }}
                 disabled={index >= activeStep}
-                aria-label={`Вернуться к шагу: ${label}`}
+                aria-label={`${getStepStatus(index)}: ${label}`}
+                optional={(
+                  <Typography
+                    variant="caption"
+                    color={index < activeStep ? 'success.main' : index === activeStep ? 'primary.main' : 'text.secondary'}
+                  >
+                    {getStepStatus(index)}
+                  </Typography>
+                )}
               >
                 {label}
               </StepButton>

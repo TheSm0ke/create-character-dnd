@@ -55,7 +55,7 @@ import type { ClassConfiguration } from '../select-class/classSelection';
 import { getClassBackgroundImage } from '../../../../assets/class-icons';
 import { SubclassSelection } from '../select-class/class-configuration/ui/SubclassSelection';
 import { getSubclassUnlockLevel } from '../select-class/class-configuration/subclassUtils';
-import { FeatureList, SpellSlots, SummaryCard } from './SheetPrimitives';
+import { FeatureList, KiPoints, SpellSlots, SummaryCard } from './SheetPrimitives';
 
 interface Personality {
   traits: string[];
@@ -663,13 +663,16 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
         + (constitutionModifier - initialConstitutionModifier) * initialCharacterLevel
         + (characterLevel - initialCharacterLevel) * hitPointsPerLevel,
     );
-  const proficiencyBonus = characterClass.levels.find(({ level }) => level === characterLevel)?.proficiency_bonus
+  const currentLevelInfo = characterClass.levels.find(({ level }) => level === characterLevel);
+  const proficiencyBonus = currentLevelInfo?.proficiency_bonus
     ?? (Math.ceil(characterLevel / 4) + 1);
+  const kiPoints = currentLevelInfo?.ki_points ?? 0;
+  const backgroundSkills = background.skill_proficiencies ?? [];
   const armorClass = calculateArmorClass(selectedArmors, dexterityModifier);
   const classSkills = [
     ...selectedSkills,
     ...(race.skill_proficiencies ?? []),
-    ...background.skill_proficiencies,
+    ...backgroundSkills,
   ].filter((skill, index, values) => values.indexOf(skill) === index);
   const proficientSkills = new Set(classSkills.map(normalize));
   const userSelectedSkills = new Set(selectedSkills.map(normalize));
@@ -1065,6 +1068,13 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
       </SummaryCard>
 
       <SummaryCard title="Магия">
+        {kiPoints > 0 && (
+          <>
+            <Typography variant="subtitle2">Ци: {kiPoints}</Typography>
+            <KiPoints points={kiPoints} />
+            <Divider sx={{ my: 2 }} />
+          </>
+        )}
         {characterClass.spellcasting ? (
           <>
             <Typography variant="body2" color="text.secondary">
@@ -1094,6 +1104,7 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
           <Typography variant="body2" color="text.secondary">Этот класс не использует заклинания.</Typography>
         )}
       </SummaryCard>
+
     </Box>
   );
 
@@ -1107,6 +1118,11 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
   const socialTab = (
     <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, minmax(0, 1fr))' }, gap: 2 }}>
       <SummaryCard title="Навыки">
+        {backgroundSkills.length > 0 && (
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            Происхождение «{background.name}»: {backgroundSkills.join(', ')}
+          </Typography>
+        )}
         {skillsLoading ? (
           <Typography variant="body2" color="text.secondary">Загрузка навыков…</Typography>
         ) : allSkills.length > 0 ? (
