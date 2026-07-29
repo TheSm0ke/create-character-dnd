@@ -6,6 +6,14 @@ export interface CharacterEquipmentItem {
   count: number;
 }
 
+export interface CharacterCurrency {
+  copper: number;
+  silver: number;
+  electrum: number;
+  gold: number;
+  platinum: number;
+}
+
 export interface CreateCharacterPayload {
   name: string;
   level: number;
@@ -42,6 +50,7 @@ export interface CreateCharacterPayload {
     instruments: string[];
     custom_equipment?: CharacterEquipmentItem[];
     removed_equipment?: CharacterEquipmentItem[];
+    currency?: CharacterCurrency;
   };
   spells: {
     cantrip_ids: string[];

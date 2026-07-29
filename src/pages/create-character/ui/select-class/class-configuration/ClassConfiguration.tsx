@@ -1,8 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Box, Typography, useTheme } from '@mui/material';
+import { Alert, Box, Typography, useTheme } from '@mui/material';
 import type { SelectChangeEvent } from '@mui/material';
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { fetchSpellsByClassAndLevel, type Class, type Spell } from '../../../../../api';
+import {
+  fetchSpellsByClassAndLevel,
+  searchTools,
+  type Class,
+  type Spell,
+} from '../../../../../api';
 import { useFetch } from '../../../../../api/useFetch';
 import { SelectSkills } from '../selectedSkills';
 import { ClassHeading } from '../ClassHeading';
@@ -29,6 +34,10 @@ interface ClassConfigurationProps {
   selectSkills?: boolean;
   section?: 'class' | 'equipment' | 'magic';
   selectedSubclass?: string;
+  onSectionValidityChange?: (
+    section: 'class' | 'equipment' | 'magic',
+    isValid: boolean,
+  ) => void;
 }
 
 export const ClassConfiguration = ({
@@ -37,6 +46,7 @@ export const ClassConfiguration = ({
   selectSkills = true,
   section = 'class',
   selectedSubclass,
+  onSectionValidityChange,
 }: ClassConfigurationProps) => {
   const theme = useTheme();
   const { proficiencies, spellcasting, name, fixed_equipment, choices } = classData;
@@ -53,7 +63,16 @@ export const ClassConfiguration = ({
       fetchSpellsByClassAndLevel(className, 'Заговор'),
       fetchSpellsByClassAndLevel(className, 1),
     ]);
-    return { cantrips, spells1 };
+    const belongsToSelectedClass = (spell: Spell) =>
+      spell.classes.some(
+        (spellClass) =>
+          spellClass.trim().toLocaleLowerCase('ru-RU') === className,
+      );
+
+    return {
+      cantrips: cantrips.filter(belongsToSelectedClass),
+      spells1: spells1.filter(belongsToSelectedClass),
+    };
   }, [name, isSpellcaster, cantripsToChoose, spells1ToChoose]);
 
   const { data: spellsData, loading, error } = useFetch(fetchSpellsData);
@@ -78,18 +97,39 @@ export const ClassConfiguration = ({
     handleRemoveSpecificItem,
   } = useEquipmentSelection(choices);
 
-  const hasInstrumentChoice = proficiencies.tools.some((tool) =>
-    tool.toLowerCase().includes('музыкальный инструмент')
-  );
+  const musicalInstrumentChoice = proficiencies.tools.find((tool) => {
+    const normalizedTool = tool.toLowerCase();
+    return normalizedTool.includes('музыкальн') && normalizedTool.includes('инструмент');
+  });
   const instrumentCount = (() => {
-    if (!hasInstrumentChoice) return 0;
-    const toolStr = proficiencies.tools.find((t) =>
-      t.toLowerCase().includes('музыкальный инструмент')
-    );
-    if (!toolStr) return 0;
-    const match = toolStr.match(/\d+/);
-    return match ? parseInt(match[0]) : 1;
+    if (!musicalInstrumentChoice) return 0;
+
+    const normalizedChoice = musicalInstrumentChoice.toLowerCase();
+    const numericCount = normalizedChoice.match(/\d+/);
+    if (numericCount) return Number(numericCount[0]);
+
+    const countWords: Array<[string, number]> = [
+      ['четыр', 4],
+      ['три', 3],
+      ['два', 2],
+      ['две', 2],
+      ['один', 1],
+      ['одно', 1],
+    ];
+    return countWords.find(([word]) => normalizedChoice.includes(word))?.[1] ?? 1;
   })();
+  const fetchMusicalInstruments = useCallback(
+    () => instrumentCount > 0
+      ? searchTools({ category: 'Музыкальные инструменты' })
+      : Promise.resolve([]),
+    [instrumentCount],
+  );
+  const {
+    data: musicalInstruments,
+    loading: musicalInstrumentsLoading,
+    error: musicalInstrumentsError,
+  } = useFetch(fetchMusicalInstruments);
+  const musicalInstrumentNames = musicalInstruments?.map((instrument) => instrument.name) ?? [];
 
   const handleSkillToggle = (skillName: string) => {
     setSelectedSkills(prev =>
@@ -99,7 +139,8 @@ export const ClassConfiguration = ({
 
   const handleInstrumentChange = (event: SelectChangeEvent<string[]>) => {
     const value = event.target.value;
-    setSelectedInstruments(typeof value === 'string' ? value.split(',') : value);
+    const nextInstruments = typeof value === 'string' ? value.split(',') : value;
+    setSelectedInstruments(nextInstruments.slice(0, instrumentCount));
   };
 
   const handleCantripToggle = useCallback((spell: Spell) => {
@@ -133,11 +174,14 @@ export const ClassConfiguration = ({
   const clearCantrips = useCallback(() => setSelectedCantrips([]), []);
   const clearSpells1 = useCallback(() => setSelectedSpells1([]), []);
 
-  const allSelected = () => {
-    if (loading) return false;
+  const areSkillsSelected = () => {
     const skillsToChoose = proficiencies.skills.number_to_choose;
-    if (selectSkills && skillsToChoose > 0 && selectedSkills.length < skillsToChoose) return false;
+    return !selectSkills
+      || skillsToChoose === 0
+      || selectedSkills.length >= skillsToChoose;
+  };
 
+  const isEquipmentSelected = () => {
     for (let i = 0; i < choices.length; i++) {
       const selection = selectedEquipment[i];
       if (!selection) return false;
@@ -169,10 +213,24 @@ export const ClassConfiguration = ({
     }
 
     if (instrumentCount > 0 && selectedInstruments.length < instrumentCount) return false;
+    return true;
+  };
+
+  const isMagicSelected = () => {
+    if (loading) return false;
     if (cantripsToChoose > 0 && selectedCantrips.length < cantripsToChoose) return false;
     if (spells1ToChoose > 0 && selectedSpells1.length < spells1ToChoose) return false;
     return true;
   };
+
+  const allSelected = () =>
+    areSkillsSelected() && isEquipmentSelected() && isMagicSelected();
+
+  const isCurrentSectionValid = section === 'equipment'
+    ? isEquipmentSelected()
+    : section === 'magic'
+      ? isMagicSelected()
+      : areSkillsSelected();
 
   const getConfiguration = () => {
     const equipment = choices.map((choice, idx) => {
@@ -240,6 +298,10 @@ export const ClassConfiguration = ({
     onConfigurationChange(configuration);
   }, [configuration, configurationSignature, onConfigurationChange]);
 
+  useEffect(() => {
+    onSectionValidityChange?.(section, isCurrentSectionValid);
+  }, [isCurrentSectionValid, onSectionValidityChange, section]);
+
   return (
     <Box sx={{ p: 2, maxWidth: '100%', boxSizing: 'border-box' }}>
       <ClassHeading
@@ -299,28 +361,43 @@ export const ClassConfiguration = ({
             handleSpecificItemSelect={handleSpecificItemSelect}
             handleRemoveSpecificItem={handleRemoveSpecificItem}
           />
-          <InstrumentSelection instrumentCount={instrumentCount} selectedInstruments={selectedInstruments} onChange={handleInstrumentChange} />
+          <InstrumentSelection
+            instrumentCount={instrumentCount}
+            instruments={musicalInstrumentNames}
+            loading={musicalInstrumentsLoading}
+            error={musicalInstrumentsError}
+            selectedInstruments={selectedInstruments}
+            onChange={handleInstrumentChange}
+          />
         </>
       )}
 
       {section === 'magic' && isSpellcaster && cantripsToChoose > 0 && (
-        <SpellSelection
-          title="Выберите заговоры"
-          spells={cantripFilter.filteredSpells}
-          selectedSpells={selectedCantrips}
-          onToggle={handleCantripToggle}
-          toChoose={cantripsToChoose}
-          searchQuery={cantripFilter.searchQuery}
-          setSearchQuery={cantripFilter.setSearchQuery}
-          damageFilter={cantripFilter.damageFilter}
-          setDamageFilter={cantripFilter.setDamageFilter}
-          damageTypes={cantripFilter.damageTypes}
-          applyRecommended={applyRecommendedCantrips}
-          clear={clearCantrips}
-          loading={loading}
-          className={name}
-          isCantrip={true}
-        />
+        <>
+          {!isEquipmentSelected() && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              Вернитесь на шаг «Выбор снаряжения» и завершите все обязательные
+              выборы, включая владение музыкальными инструментами.
+            </Alert>
+          )}
+          <SpellSelection
+            title="Выберите заговоры"
+            spells={cantripFilter.filteredSpells}
+            selectedSpells={selectedCantrips}
+            onToggle={handleCantripToggle}
+            toChoose={cantripsToChoose}
+            searchQuery={cantripFilter.searchQuery}
+            setSearchQuery={cantripFilter.setSearchQuery}
+            damageFilter={cantripFilter.damageFilter}
+            setDamageFilter={cantripFilter.setDamageFilter}
+            damageTypes={cantripFilter.damageTypes}
+            applyRecommended={applyRecommendedCantrips}
+            clear={clearCantrips}
+            loading={loading}
+            className={name}
+            isCantrip={true}
+          />
+        </>
       )}
 
       {section === 'magic' && isSpellcaster && spells1ToChoose > 0 && (

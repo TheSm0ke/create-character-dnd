@@ -38,19 +38,6 @@ export const damageIcons: Record<string, string> = {
   'Ядом': PoisonIcon,
 };
 
-export const INSTRUMENTS = [
-  'Лютня',
-  'Флейта',
-  'Арфа',
-  'Виола',
-  'Барабан',
-  'Рожок',
-  'Труба',
-  'Цимбалы',
-  'Скрипка',
-  'Гитара',
-];
-
 export const recommendedSpells: Record<string, { cantrips: string[]; spells1: string[] }> = {
   'Бард': {
     cantrips: ['Дружба', 'Фокусы', 'Сообщение'],

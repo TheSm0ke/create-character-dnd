@@ -48,7 +48,11 @@ export const searchSpells = (query: {
 };
 
 export const fetchSpellsByClassAndLevel = (className: string, level: string | number): Promise<Spell[]> => {
-  const url = `/spells/search?classes=${encodeURIComponent(className)}&level=${encodeURIComponent(String(level))}`;
-  return get<Spell[]>(url);
+  const params = new URLSearchParams({
+    classes: className,
+    level: String(level),
+    category: '^spells$',
+  });
+  return get<Spell[]>(`/spells/search?${params.toString()}`);
 };
 

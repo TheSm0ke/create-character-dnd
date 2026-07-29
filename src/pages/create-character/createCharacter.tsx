@@ -4,10 +4,10 @@ import {
   Typography,
   Button,
   Step,
-  StepLabel,
+  StepButton,
   Stepper,
 } from "@mui/material";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { fetchRaces, fetchClasses, fetchBackgrounds, fetchAlignments, fetchLanguages } from "../../api";
 import { useFetch } from "../../api/useFetch";
 import { SelectRace } from "./ui/select-race/selectRace";
@@ -26,7 +26,7 @@ import {
   isSkillSelectionValid,
   type AbilityScores,
 } from "./ui/select-abilities";
-import type { Race, Class, Background, Alignment, CharacterEquipmentItem, Language } from "../../api";
+import type { Race, Class, Background, Alignment, CharacterCurrency, CharacterEquipmentItem, Language } from "../../api";
 import { getBackgroundLanguageChoiceCount } from "./ui/select-background/languageChoices";
 import { NavigationMenu } from "../../components/NavigationMenu";
 
@@ -42,35 +42,129 @@ const steps = [
   "Лист персонажа",
 ];
 
-const CreateCharacter = () => {
-  const [activeStep, setActiveStep] = useState(0);
-  const characterSheetRef = useRef<CharacterSheetHandle>(null);
+const CHARACTER_DRAFT_STORAGE_KEY = 'dnd-character-wizard-draft-v1';
 
-  const [selectedRace, setSelectedRace] = useState<Race | null>(null);
-  const [selectedClass, setSelectedClass] = useState<Class | null>(null);
+interface CharacterDraft {
+  activeStep: number;
+  selectedRace: Race | null;
+  selectedClass: Class | null;
+  selectedBackground: Background | null;
+  selectedBackgroundLanguages: string[];
+  selectedAlignment: Alignment | null;
+  characterName: string;
+  experience: number;
+  featIds: string[];
+  currentHitPoints: number | null;
+  characterLevel: number;
+  customEquipment: CharacterEquipmentItem[];
+  removedEquipment: CharacterEquipmentItem[];
+  currency: CharacterCurrency;
+  selectedPersonality: {
+    traits: string[];
+    ideals: string[];
+    bonds: string[];
+    flaws: string[];
+  } | null;
+  abilityScores: AbilityScores | null;
+  selectedSkills: string[];
+  classConfiguration: ClassConfiguration | null;
+}
+
+const readCharacterDraft = (): CharacterDraft | null => {
+  try {
+    const rawDraft = window.localStorage.getItem(CHARACTER_DRAFT_STORAGE_KEY);
+    return rawDraft ? JSON.parse(rawDraft) as CharacterDraft : null;
+  } catch {
+    window.localStorage.removeItem(CHARACTER_DRAFT_STORAGE_KEY);
+    return null;
+  }
+};
+
+const CreateCharacter = () => {
+  const [draft] = useState(readCharacterDraft);
+  const [activeStep, setActiveStep] = useState(() => Math.max(0, Math.min(steps.length - 1, draft?.activeStep ?? 0)));
+  const characterSheetRef = useRef<CharacterSheetHandle>(null);
+  const [wizardResetVersion, setWizardResetVersion] = useState(0);
+
+  const [selectedRace, setSelectedRace] = useState<Race | null>(() => draft?.selectedRace ?? null);
+  const [selectedClass, setSelectedClass] = useState<Class | null>(() => draft?.selectedClass ?? null);
   const [selectedBackground, setSelectedBackground] =
-    useState<Background | null>(null);
-  const [selectedBackgroundLanguages, setSelectedBackgroundLanguages] = useState<string[]>([]);
-  const [selectedAlignment, setSelectedAlignment] = useState<Alignment | null>(null);
-  const [characterName, setCharacterName] = useState("");
-  const [experience, setExperience] = useState(0);
-  const [featIds, setFeatIds] = useState<string[]>([]);
-  const [currentHitPoints, setCurrentHitPoints] = useState<number | null>(null);
-  const [characterLevel, setCharacterLevel] = useState(1);
-  const [customEquipment, setCustomEquipment] = useState<CharacterEquipmentItem[]>([]);
-  const [removedEquipment, setRemovedEquipment] = useState<CharacterEquipmentItem[]>([]);
+    useState<Background | null>(() => draft?.selectedBackground ?? null);
+  const [selectedBackgroundLanguages, setSelectedBackgroundLanguages] = useState<string[]>(() => draft?.selectedBackgroundLanguages ?? []);
+  const [selectedAlignment, setSelectedAlignment] = useState<Alignment | null>(() => draft?.selectedAlignment ?? null);
+  const [characterName, setCharacterName] = useState(() => draft?.characterName ?? "");
+  const [experience, setExperience] = useState(() => draft?.experience ?? 0);
+  const [featIds, setFeatIds] = useState<string[]>(() => draft?.featIds ?? []);
+  const [currentHitPoints, setCurrentHitPoints] = useState<number | null>(() => draft?.currentHitPoints ?? null);
+  const [characterLevel, setCharacterLevel] = useState(() => draft?.characterLevel ?? 1);
+  const [customEquipment, setCustomEquipment] = useState<CharacterEquipmentItem[]>(() => draft?.customEquipment ?? []);
+  const [removedEquipment, setRemovedEquipment] = useState<CharacterEquipmentItem[]>(() => draft?.removedEquipment ?? []);
+  const [currency, setCurrency] = useState<CharacterCurrency>(() => draft?.currency ?? ({
+    copper: 0,
+    silver: 0,
+    electrum: 0,
+    gold: 0,
+    platinum: 0,
+  }));
   const [selectedPersonality, setSelectedPersonality] = useState<{
     traits: string[];
     ideals: string[];
     bonds: string[];
     flaws: string[];
-  } | null>(null);
+  } | null>(() => draft?.selectedPersonality ?? null);
   const [abilityScores, setAbilityScores] = useState<AbilityScores | null>(
-    null,
+    () => draft?.abilityScores ?? null,
   );
-  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+  const [selectedSkills, setSelectedSkills] = useState<string[]>(() => draft?.selectedSkills ?? []);
   const [classConfiguration, setClassConfiguration] =
-    useState<ClassConfiguration | null>(null);
+    useState<ClassConfiguration | null>(() => draft?.classConfiguration ?? null);
+  const [classSectionValidity, setClassSectionValidity] = useState(() => ({
+    equipment: Boolean(draft?.classConfiguration),
+    magic: Boolean(draft?.classConfiguration),
+  }));
+
+  useEffect(() => {
+    const draft: CharacterDraft = {
+      activeStep,
+      selectedRace,
+      selectedClass,
+      selectedBackground,
+      selectedBackgroundLanguages,
+      selectedAlignment,
+      characterName,
+      experience,
+      featIds,
+      currentHitPoints,
+      characterLevel,
+      customEquipment,
+      removedEquipment,
+      currency,
+      selectedPersonality,
+      abilityScores,
+      selectedSkills,
+      classConfiguration,
+    };
+    window.localStorage.setItem(CHARACTER_DRAFT_STORAGE_KEY, JSON.stringify(draft));
+  }, [
+    abilityScores,
+    activeStep,
+    characterLevel,
+    characterName,
+    classConfiguration,
+    currency,
+    currentHitPoints,
+    customEquipment,
+    experience,
+    featIds,
+    removedEquipment,
+    selectedAlignment,
+    selectedBackground,
+    selectedBackgroundLanguages,
+    selectedClass,
+    selectedPersonality,
+    selectedRace,
+    selectedSkills,
+  ]);
 
   const {
     data: races,
@@ -101,7 +195,8 @@ const CreateCharacter = () => {
   const handleNext = async () => {
     if (activeStep === 0 && !selectedRace) return;
     if (activeStep === 1 && !selectedClass) return;
-    if (activeStep === 3 && !classConfiguration) return;
+    if (activeStep === 2 && !classSectionValidity.equipment) return;
+    if (activeStep === 3 && (!classSectionValidity.magic || !classConfiguration)) return;
     if (
       activeStep === 4
       && (!selectedBackground
@@ -128,11 +223,35 @@ const CreateCharacter = () => {
     setActiveStep((prev) => prev - 1);
   };
 
+  const handleResetDraft = () => {
+    window.localStorage.removeItem(CHARACTER_DRAFT_STORAGE_KEY);
+    setActiveStep(0);
+    setSelectedRace(null);
+    setSelectedClass(null);
+    setSelectedBackground(null);
+    setSelectedBackgroundLanguages([]);
+    setSelectedAlignment(null);
+    setCharacterName('');
+    setExperience(0);
+    setFeatIds([]);
+    setCurrentHitPoints(null);
+    setCharacterLevel(1);
+    setCustomEquipment([]);
+    setRemovedEquipment([]);
+    setCurrency({ copper: 0, silver: 0, electrum: 0, gold: 0, platinum: 0 });
+    setSelectedPersonality(null);
+    setAbilityScores(null);
+    setSelectedSkills([]);
+    setClassConfiguration(null);
+    setClassSectionValidity({ equipment: false, magic: false });
+    setWizardResetVersion((version) => version + 1);
+  };
+
   const isStepValid = () => {
     if (activeStep === 0) return !!selectedRace;
     if (activeStep === 1) return !!selectedClass;
-    if (activeStep === 2) return true;
-    if (activeStep === 3) return !!classConfiguration;
+    if (activeStep === 2) return classSectionValidity.equipment;
+    if (activeStep === 3) return classSectionValidity.magic && !!classConfiguration;
     if (activeStep === 4) {
       return !!selectedBackground
         && selectedBackgroundLanguages.length === getBackgroundLanguageChoiceCount(selectedBackground.languages);
@@ -162,12 +281,26 @@ const CreateCharacter = () => {
     }
     setSelectedClass(cls);
     setClassConfiguration(null);
+    setClassSectionValidity({ equipment: false, magic: false });
   };
 
   const handleClassConfigurationStart = () => {
     setSelectedClass(null);
     setClassConfiguration(null);
+    setClassSectionValidity({ equipment: false, magic: false });
     setSelectedSkills([]);
+  };
+
+  const handleClassSectionValidityChange = (
+    section: 'class' | 'equipment' | 'magic',
+    isValid: boolean,
+  ) => {
+    if (section === 'class') return;
+    setClassSectionValidity((current) => (
+      current[section] === isValid
+        ? current
+        : { ...current, [section]: isValid }
+    ));
   };
 
   const handleSelectRace = (race: Race) => {
@@ -233,9 +366,17 @@ const CreateCharacter = () => {
         }}
       >
         <Stepper activeStep={activeStep} alternativeLabel sx={{ gap: 1 }}>
-          {steps.map((label) => (
-            <Step key={label}>
-              <StepLabel>{label}</StepLabel>
+          {steps.map((label, index) => (
+            <Step key={label} completed={index < activeStep}>
+              <StepButton
+                onClick={() => {
+                  if (index < activeStep) setActiveStep(index);
+                }}
+                disabled={index >= activeStep}
+                aria-label={`Вернуться к шагу: ${label}`}
+              >
+                {label}
+              </StepButton>
             </Step>
           ))}
         </Stepper>
@@ -251,11 +392,15 @@ const CreateCharacter = () => {
         )}
         <Box sx={{ display: activeStep >= 1 && activeStep <= 3 ? 'block' : 'none' }}>
           <ClassSelection
+            key={wizardResetVersion}
             classes={classes || []}
+            initialSelectedClass={selectedClass}
+            initialSelectedSubclass={classConfiguration?.subclass}
             onSelect={handleSelectClass}
             onClassSelected={handleClassSelected}
             onConfigurationChange={setClassConfiguration}
             onConfigurationStart={handleClassConfigurationStart}
+            onSectionValidityChange={handleClassSectionValidityChange}
             section={activeStep === 2 ? 'equipment' : activeStep === 3 ? 'magic' : 'class'}
           />
         </Box>
@@ -326,8 +471,10 @@ const CreateCharacter = () => {
               onClassConfigurationChange={setClassConfiguration}
               customEquipment={customEquipment}
               removedEquipment={removedEquipment}
+              currency={currency}
               onCustomEquipmentChange={setCustomEquipment}
               onRemovedEquipmentChange={setRemovedEquipment}
+              onCurrencyChange={setCurrency}
             />
           )}
       </Box>
@@ -352,6 +499,9 @@ const CreateCharacter = () => {
           disabled={activeStep === 0}
         >
           Назад
+        </Button>
+        <Button variant="text" color="error" onClick={handleResetDraft}>
+          Сбросить черновик
         </Button>
         <Button
           variant="contained"

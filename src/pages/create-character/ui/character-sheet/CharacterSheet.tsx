@@ -42,6 +42,7 @@ import {
   type Background,
   type Class,
   type CharacterEquipmentItem,
+  type CharacterCurrency,
   type CreateCharacterPayload,
   type Race,
   type Spell,
@@ -91,8 +92,10 @@ interface CharacterSheetProps {
   onClassConfigurationChange?: (configuration: ClassConfiguration) => void;
   customEquipment?: CharacterEquipmentItem[];
   removedEquipment?: CharacterEquipmentItem[];
+  currency?: CharacterCurrency;
   onCustomEquipmentChange?: (equipment: CharacterEquipmentItem[]) => void;
   onRemovedEquipmentChange?: (equipment: CharacterEquipmentItem[]) => void;
+  onCurrencyChange?: (currency: CharacterCurrency) => void;
 }
 
 export interface CharacterSheetHandle {
@@ -293,6 +296,7 @@ interface SearchInventoryItem {
 interface AppliedLevelChange {
   level: number;
   abilityScoreIncrease?: AbilityKey;
+  featAbilityBonuses?: Array<{ ability: AbilityKey; bonus: number }>;
   selectedSubclassId?: string;
   addedCantripIds: string[];
   addedSpellIds: string[];
@@ -406,8 +410,10 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
   onClassConfigurationChange,
   customEquipment = [],
   removedEquipment = [],
+  currency = { copper: 0, silver: 0, electrum: 0, gold: 0, platinum: 0 },
   onCustomEquipmentChange,
   onRemovedEquipmentChange,
+  onCurrencyChange,
 }, ref) => {
   const [tab, setTab] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -417,6 +423,7 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
   const [abilityScoreIncrease, setAbilityScoreIncrease] = useState<AbilityKey | ''>('');
   const [advancementChoice, setAdvancementChoice] = useState<'ability' | 'feat'>('ability');
   const [pendingFeatId, setPendingFeatId] = useState('');
+  const [pendingFeatAbilityChoices, setPendingFeatAbilityChoices] = useState<Record<number, AbilityKey>>({});
   const [pendingSubclassId, setPendingSubclassId] = useState('');
   const [pendingCantrips, setPendingCantrips] = useState<Spell[]>([]);
   const [pendingSpells, setPendingSpells] = useState<Spell[]>([]);
@@ -440,6 +447,21 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
   const weapons = weaponsData ?? [];
   const armors = armorsData ?? [];
   const feats = featsData ?? [];
+  const pendingFeat = feats.find((feat) => feat._id === pendingFeatId);
+  const pendingFeatAbilityBonuses = pendingFeat?.ability_bonuses ?? [];
+  const selectedFeatAbilityBonuses = pendingFeatAbilityBonuses.flatMap((abilityBonus, index) => {
+    const ability = abilityBonus.abilities.length === 1
+      ? abilityBonus.abilities[0]
+      : pendingFeatAbilityChoices[index];
+
+    return ability
+      ? [{ ability: ability as AbilityKey, bonus: abilityBonus.bonus, maximum: abilityBonus.maximum }]
+      : [];
+  });
+  const requiresFeatAbilityChoice = pendingFeatAbilityBonuses.some(
+    (abilityBonus, index) =>
+      abilityBonus.abilities.length > 1 && !pendingFeatAbilityChoices[index],
+  );
 
   const totalScores = useMemo(() => {
     const totals = { ...abilityScores };
@@ -449,6 +471,9 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
     });
     return totals;
   }, [abilityScores, race.ability_bonuses]);
+  const hasUnavailableFeatAbilityBonus = selectedFeatAbilityBonuses.some(
+    ({ ability, maximum }) => totalScores[ability] >= maximum,
+  );
 
   const selectedSubclass = characterClass.subclasses.find(
     (subclass) => subclass.id === classConfiguration.subclass,
@@ -552,6 +577,18 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
     (total, entry) => total + (getWeightInPounds(entry.weight) ?? 0) * entry.count,
     0,
   );
+  const coinCount = currency.copper + currency.silver + currency.electrum + currency.gold + currency.platinum;
+  const currencyWeight = coinCount / 50;
+  const carriedWeight = totalWeight + currencyWeight;
+  const currencyValueCp = (
+    currency.copper
+    + currency.silver * 10
+    + currency.electrum * 50
+    + currency.gold * 100
+    + currency.platinum * 1000
+  );
+  const carryingCapacity = totalScores.str * 15;
+  const isOverCarryingCapacity = carriedWeight > carryingCapacity;
   const hasItemsWithoutWeight = inventoryEntries.some(
     (entry) => getWeightInPounds(entry.weight) === undefined,
   );
@@ -742,6 +779,7 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
     setAbilityScoreIncrease('');
     setAdvancementChoice('ability');
     setPendingFeatId('');
+    setPendingFeatAbilityChoices({});
     setPendingSubclassId('');
     setPendingCantrips([]);
     setPendingSpells([]);
@@ -758,11 +796,17 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
     if (characterLevel <= 1 || pendingLevel !== null) return;
 
     const change = appliedLevelChanges.find((item) => item.level === characterLevel);
-    if (change?.abilityScoreIncrease && onAbilityScoresChange) {
-      onAbilityScoresChange({
-        ...abilityScores,
-        [change.abilityScoreIncrease]: Math.max(1, abilityScores[change.abilityScoreIncrease] - 2),
+    if ((change?.abilityScoreIncrease || change?.featAbilityBonuses?.length) && onAbilityScoresChange) {
+      const nextScores = { ...abilityScores };
+
+      if (change.abilityScoreIncrease) {
+        nextScores[change.abilityScoreIncrease] = Math.max(1, nextScores[change.abilityScoreIncrease] - 2);
+      }
+      change.featAbilityBonuses?.forEach(({ ability, bonus }) => {
+        nextScores[ability] = Math.max(1, nextScores[ability] - bonus);
       });
+
+      onAbilityScoresChange(nextScores);
     }
 
     if (change && onClassConfigurationChange) {
@@ -789,6 +833,7 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
     if (pendingLevel === null) return;
     if (requiresAdvancementChoice && advancementChoice === 'ability' && !abilityScoreIncrease) return;
     if (requiresAdvancementChoice && advancementChoice === 'feat' && !pendingFeatId) return;
+    if (requiresAdvancementChoice && advancementChoice === 'feat' && requiresFeatAbilityChoice) return;
     if (requiresSubclassSelection && !pendingSubclassId) return;
     if (requiresCantripSelection && pendingCantrips.length !== cantripsToChooseAtNextLevel) return;
     if (requiresSpellSelection && pendingSpells.length !== spellsToChooseAtNextLevel) return;
@@ -799,8 +844,26 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
         [abilityScoreIncrease]: Math.min(20, abilityScores[abilityScoreIncrease] + 2),
       });
     }
+    const appliedFeatAbilityBonuses: Array<{ ability: AbilityKey; bonus: number }> = [];
     if (advancementChoice === 'feat' && pendingFeatId) {
       onFeatIdsChange?.([...featIds, pendingFeatId]);
+
+      if (selectedFeatAbilityBonuses.length > 0 && onAbilityScoresChange) {
+        const nextScores = { ...abilityScores };
+
+        selectedFeatAbilityBonuses.forEach(({ ability, bonus, maximum }) => {
+          const racialBonus = totalScores[ability] - abilityScores[ability];
+          const availableIncrease = Math.max(0, maximum - (nextScores[ability] + racialBonus));
+          const appliedBonus = Math.min(bonus, availableIncrease);
+
+          if (appliedBonus > 0) {
+            nextScores[ability] += appliedBonus;
+            appliedFeatAbilityBonuses.push({ ability, bonus: appliedBonus });
+          }
+        });
+
+        onAbilityScoresChange(nextScores);
+      }
     }
 
     if (onClassConfigurationChange) {
@@ -821,6 +884,7 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
         addedCantripIds: pendingCantrips.map((spell) => spell._id),
         addedSpellIds: pendingSpells.map((spell) => spell._id),
         addedFeatId: advancementChoice === 'feat' ? pendingFeatId || undefined : undefined,
+        featAbilityBonuses: appliedFeatAbilityBonuses,
       },
     ]);
     onCharacterLevelChange?.(pendingLevel);
@@ -862,6 +926,7 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
         instruments: classConfiguration.instruments ?? [],
         custom_equipment: customEquipment,
         removed_equipment: removedEquipment,
+        currency,
       },
       spells: {
         cantrip_ids: classConfiguration.cantrips.map((spell) => spell._id),
@@ -1117,8 +1182,14 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
             <Typography variant="subtitle2" color="text.secondary">
               Общий вес
             </Typography>
-            <Typography variant="h4" color="secondary.main">
-              {totalWeight.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} фнт.
+            <Typography variant="h4">
+              <Box component="span" sx={{ color: isOverCarryingCapacity ? 'error.main' : 'secondary.main' }}>
+                {carriedWeight.toLocaleString('ru-RU', { maximumFractionDigits: 2 })}
+              </Box>
+              {' / '}{carryingCapacity.toLocaleString('ru-RU')} фнт.
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Максимальная нагрузка рассчитывается как Сила × 15.
             </Typography>
           </Box>
           <Button variant="contained" onClick={() => setIsInventoryDialogOpen(true)}>
@@ -1130,6 +1201,52 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
             В итог не включены предметы без веса в справочнике.
           </Typography>
         )}
+        {isOverCarryingCapacity && (
+          <Typography variant="body2" color="error.main" sx={{ mt: 0.5 }}>
+            Превышен максимальный переносимый вес.
+          </Typography>
+        )}
+      </Paper>
+
+      <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+        <Typography variant="subtitle1" sx={{ mb: 1.5 }}>Кошелёк</Typography>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', sm: 'repeat(5, minmax(0, 1fr))' },
+            gap: 1.25,
+          }}
+        >
+          {([
+            ['platinum', 'Платина'],
+            ['gold', 'Золото'],
+            ['electrum', 'Электрум'],
+            ['silver', 'Серебро'],
+            ['copper', 'Медь'],
+          ] as Array<[keyof CharacterCurrency, string]>).map(([key, label]) => (
+            <TextField
+              key={key}
+              label={label}
+              type="number"
+              value={currency[key] ?? 0}
+              onChange={(event) => {
+                const value = Number(event.target.value);
+                if (!Number.isFinite(value)) return;
+                onCurrencyChange?.({ ...currency, [key]: Math.max(0, Math.floor(value)) });
+              }}
+              slotProps={{ htmlInput: { min: 0, step: 1 } }}
+              size="small"
+              disabled={!onCurrencyChange}
+            />
+          ))}
+        </Box>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
+          Всего: {currencyValueCp.toLocaleString('ru-RU')} мм · {(currencyValueCp / 100).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} зм
+          {coinCount > 0 && ` · Вес монет: ${currencyWeight.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} фнт.`}
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+          Курс: 10 мм = 1 см, 5 см = 1 эм, 2 эм = 1 зм, 10 зм = 1 пм. 50 монет весят 1 фнт.
+        </Typography>
       </Paper>
 
       {inventoryEntries.length > 0 ? (
@@ -1203,9 +1320,6 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
         </SummaryCard>
       )}
 
-      <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-        Деньги пока не заданы.
-      </Typography>
     </Box>
   );
 
@@ -1566,27 +1680,138 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
                   </Select>
                 </FormControl>
               ) : (
-                <FormControl fullWidth required>
-                  <InputLabel id="feat-selection-label">Черта</InputLabel>
-                  <Select
-                    labelId="feat-selection-label"
-                    label="Черта"
-                    value={pendingFeatId}
-                    onChange={(event) => setPendingFeatId(event.target.value)}
-                    disabled={featsLoading}
-                  >
-                    {feats.map((feat) => (
-                      <MenuItem key={feat._id} value={feat._id} disabled={featIds.includes(feat._id)}>
-                        {feat.name}{feat.prerequisite ? ` — ${feat.prerequisite}` : ''}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                  {pendingFeatId && (
-                    <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75 }}>
-                      {feats.find((feat) => feat._id === pendingFeatId)?.description}
+                <Box>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                    Выберите одну черту. Уже выбранные персонажем черты недоступны.
+                  </Typography>
+                  {featsLoading ? (
+                    <Typography variant="body2" color="text.secondary">
+                      Загрузка черт…
                     </Typography>
+                  ) : (
+                    <Box
+                      sx={{
+                        display: 'grid',
+                        gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+                        gap: 1.5,
+                        maxHeight: 440,
+                        overflowY: 'auto',
+                        pr: 1,
+                      }}
+                    >
+                      {feats.map((feat) => {
+                        const isSelected = pendingFeatId === feat._id;
+                        const isAlreadyChosen = featIds.includes(feat._id);
+
+                        return (
+                          <Card
+                            key={feat._id}
+                            variant="outlined"
+                            onClick={() => {
+                              if (!isAlreadyChosen) {
+                                setPendingFeatId(feat._id);
+                                setPendingFeatAbilityChoices({});
+                              }
+                            }}
+                            sx={{
+                              cursor: isAlreadyChosen ? 'not-allowed' : 'pointer',
+                              opacity: isAlreadyChosen ? 0.55 : 1,
+                              borderColor: isSelected ? 'primary.main' : 'divider',
+                              backgroundColor: isSelected ? 'action.selected' : 'background.paper',
+                              '&:hover': isAlreadyChosen
+                                ? undefined
+                                : { borderColor: 'primary.light', backgroundColor: 'action.hover' },
+                            }}
+                          >
+                            <CardContent>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}>
+                                <Typography variant="h6" component="h3">{feat.name}</Typography>
+                              </Box>
+                              {isSelected && (
+                                <Typography variant="caption" color="primary.main" sx={{ display: 'block', mt: 0.75 }}>
+                                  Выбрано
+                                </Typography>
+                              )}
+                              {isAlreadyChosen && (
+                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+                                  Эта черта уже есть у персонажа
+                                </Typography>
+                              )}
+                              {feat.prerequisite && (
+                                <Typography variant="caption" color="secondary.main" sx={{ display: 'block', mt: 0.75 }}>
+                                  Требование: {feat.prerequisite}
+                                </Typography>
+                              )}
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                sx={{ mt: 1, whiteSpace: 'pre-line' }}
+                              >
+                                {feat.description}
+                              </Typography>
+                              {feat.benefits.length > 0 && (
+                                <Typography variant="body2" sx={{ mt: 1.25 }}>
+                                  Преимущества: {feat.benefits.join(', ')}
+                                </Typography>
+                              )}
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </Box>
                   )}
-                </FormControl>
+                  {pendingFeatAbilityBonuses.length > 0 && (
+                    <Box sx={{ mt: 2 }}>
+                      <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                        Бонус характеристики
+                      </Typography>
+                      {pendingFeatAbilityBonuses.map((abilityBonus, index) => {
+                        const isChoiceRequired = abilityBonus.abilities.length > 1;
+                        const selectedAbility = isChoiceRequired
+                          ? pendingFeatAbilityChoices[index]
+                          : abilityBonus.abilities[0] as AbilityKey;
+
+                        return (
+                          <Box key={`${abilityBonus.abilities.join('-')}-${index}`} sx={{ mb: 1.5 }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
+                              {isChoiceRequired
+                                ? `Выберите характеристику: +${abilityBonus.bonus} (максимум ${abilityBonus.maximum})`
+                                : `${ABILITIES.find(({ key }) => key === selectedAbility)?.name ?? selectedAbility}: +${abilityBonus.bonus} (максимум ${abilityBonus.maximum})`}
+                            </Typography>
+                            {isChoiceRequired ? (
+                              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                                {abilityBonus.abilities.map((ability) => {
+                                  const key = ability as AbilityKey;
+                                  const unavailable = totalScores[key] >= abilityBonus.maximum;
+
+                                  return (
+                                    <Button
+                                      key={key}
+                                      size="small"
+                                      variant={pendingFeatAbilityChoices[index] === key ? 'contained' : 'outlined'}
+                                      disabled={unavailable}
+                                      onClick={() => setPendingFeatAbilityChoices((choices) => ({
+                                        ...choices,
+                                        [index]: key,
+                                      }))}
+                                    >
+                                      {ABILITIES.find(({ key: abilityKey }) => abilityKey === key)?.name}
+                                      {unavailable ? ' (максимум)' : ''}
+                                    </Button>
+                                  );
+                                })}
+                              </Box>
+                            ) : totalScores[selectedAbility] >= abilityBonus.maximum ? (
+                              <Typography variant="caption" color="error.main">
+                                Бонус недоступен: значение характеристики уже достигло максимума.
+                              </Typography>
+                            ) : null}
+                          </Box>
+                        );
+                      })}
+                    </Box>
+                  )}
+                </Box>
               )}
             </Box>
           )}
@@ -1606,6 +1831,8 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
             disabled={
               (requiresAdvancementChoice && advancementChoice === 'ability' && !abilityScoreIncrease)
               || (requiresAdvancementChoice && advancementChoice === 'feat' && !pendingFeatId)
+              || (requiresAdvancementChoice && advancementChoice === 'feat' && requiresFeatAbilityChoice)
+              || (requiresAdvancementChoice && advancementChoice === 'feat' && hasUnavailableFeatAbilityBonus)
               || (requiresSubclassSelection && !pendingSubclassId)
               || (requiresCantripSelection && pendingCantrips.length !== cantripsToChooseAtNextLevel)
               || (requiresSpellSelection && pendingSpells.length !== spellsToChooseAtNextLevel)

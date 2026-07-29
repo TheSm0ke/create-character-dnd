@@ -25,23 +25,32 @@ export interface ClassConfiguration {
 
 interface ClassSelectionProps {
   classes: Class[];
+  initialSelectedClass?: Class | null;
+  initialSelectedSubclass?: string;
   onSelect: (classData: Class, config: ClassConfiguration) => void;
   onClassSelected: (classData: Class) => void;
   onConfigurationChange: (config: ClassConfiguration | null) => void;
   onConfigurationStart: () => void;
+  onSectionValidityChange: (
+    section: 'class' | 'equipment' | 'magic',
+    isValid: boolean,
+  ) => void;
   section: 'class' | 'equipment' | 'magic';
 }
 
 export const ClassSelection = ({
   classes,
+  initialSelectedClass = null,
+  initialSelectedSubclass = '',
   onSelect,
   onClassSelected,
   onConfigurationChange,
   onConfigurationStart,
+  onSectionValidityChange,
   section,
 }: ClassSelectionProps) => {
-  const [selectedClass, setSelectedClass] = useState<Class | null>(null);
-  const [selectedSubclass, setSelectedSubclass] = useState('');
+  const [selectedClass, setSelectedClass] = useState<Class | null>(initialSelectedClass);
+  const [selectedSubclass, setSelectedSubclass] = useState(initialSelectedSubclass);
   const [isSubclassDialogOpen, setIsSubclassDialogOpen] = useState(false);
 
   const hasAvailableSubclass = selectedClass?.subclasses.some(
@@ -91,6 +100,7 @@ export const ClassSelection = ({
             selectSkills={false}
             section={section}
             selectedSubclass={selectedSubclass}
+            onSectionValidityChange={onSectionValidityChange}
           />
         </Box>
       )}

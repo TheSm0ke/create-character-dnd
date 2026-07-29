@@ -11,6 +11,7 @@ import {
   type Alignment,
   type Background,
   type Character,
+  type CharacterCurrency,
   type CharacterEquipmentItem,
   type Class,
   type Race,
@@ -53,6 +54,15 @@ const CharacterSheetEditor = ({
   );
   const [removedEquipment, setRemovedEquipment] = useState<CharacterEquipmentItem[]>(
     character.inventory.removed_equipment ?? [],
+  );
+  const [currency, setCurrency] = useState<CharacterCurrency>(
+    character.inventory.currency ?? {
+      copper: 0,
+      silver: 0,
+      electrum: 0,
+      gold: 0,
+      platinum: 0,
+    },
   );
 
   const [classConfiguration, setClassConfiguration] = useState<ClassConfiguration>({
@@ -104,8 +114,10 @@ const CharacterSheetEditor = ({
         onClassConfigurationChange={setClassConfiguration}
         customEquipment={customEquipment}
         removedEquipment={removedEquipment}
+        currency={currency}
         onCustomEquipmentChange={setCustomEquipment}
         onRemovedEquipmentChange={setRemovedEquipment}
+        onCurrencyChange={setCurrency}
       />
     </Box>
   );

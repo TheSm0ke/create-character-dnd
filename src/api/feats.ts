@@ -6,6 +6,12 @@ export interface Feat {
   description: string;
   prerequisite?: string | null;
   benefits: string[];
+  ability_bonuses: Array<{
+    abilities: Array<'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha'>;
+    bonus: number;
+    choose: number;
+    maximum: number;
+  }>;
 }
 
 export const fetchFeats = (): Promise<Feat[]> => get<Feat[]>('/feats');
