@@ -1,14 +1,19 @@
 import { useState } from 'react';
 import { alpha, useTheme } from '@mui/material/styles';
-import { Box, Typography, Chip, Divider, TextField, useMediaQuery } from '@mui/material';
+import { Box, Chip, TextField, Typography, useMediaQuery } from '@mui/material';
 import type { Class } from '../../../../api';
 import { getClassBackgroundImage } from '../../../../assets/class-icons';
 import { ClassHeading } from './ClassHeading';
 import { hasSpellcasting } from './spellcastingUtils';
 
-// ==============================
-// Карточка одного класса
-// ==============================
+const getShortDescription = (description: string) => {
+  const normalizedDescription = description.replace(/\s+/g, ' ').trim();
+  const maxLength = 170;
+
+  if (normalizedDescription.length <= maxLength) return normalizedDescription;
+  return `${normalizedDescription.slice(0, maxLength).trimEnd()}…`;
+};
+
 const ClassCard = ({
   classData,
   selected,
@@ -21,327 +26,146 @@ const ClassCard = ({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [hover, setHover] = useState(false);
-
   const {
     name,
     description,
     hit_dice,
     primary_ability,
     proficiencies,
-    features,
-    subclasses,
     spellcasting,
-    levels,
-    fixed_equipment,
-    choices,
   } = classData;
-
-  const handleClick = () => onSelect();
-  const isSpellcaster = hasSpellcasting(spellcasting);
   const backgroundImage = getClassBackgroundImage(name);
-
-  const sortedLevels = [...levels].sort((a, b) => a.level - b.level);
-  const firstLevels = sortedLevels.slice(0, 3);
-  const remainingLevels = sortedLevels.length - 3;
-
-  const firstFeatures = features.slice(0, 4);
-  const remainingFeatures = features.length - 4;
+  const isSpellcaster = hasSpellcasting(spellcasting);
+  const proficiencyItems = [
+    ...proficiencies.armor,
+    ...proficiencies.weapons,
+    ...proficiencies.tools,
+  ];
 
   return (
     <Box
+      role="button"
+      tabIndex={0}
+      aria-pressed={selected}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      onClick={handleClick}
+      onClick={onSelect}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onSelect();
+        }
+      }}
       sx={{
-        padding: isMobile ? '0px 18px 20px' : '0px 22px 24px',
-        borderRadius: 2,
-        border: '2px solid',
-        borderColor: selected
-          ? theme.palette.primary.main
-          : hover
-          ? theme.palette.primary.light
-          : theme.palette.divider,
-        margin: 0,
-        textAlign: 'left',
         position: 'relative',
         isolation: 'isolate',
         overflow: 'hidden',
-        transition: 'transform 0.25s ease, border-color 0.3s ease, background-color 0.3s ease',
-        transform: selected ? 'scale(1.02)' : hover ? 'scale(1.01)' : 'scale(1)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignSelf: 'stretch',
+        minHeight: 280,
+        p: isMobile ? 2 : 2.25,
+        border: '2px solid',
+        borderColor: selected
+          ? 'primary.main'
+          : hover
+            ? 'primary.light'
+            : 'divider',
+        borderRadius: 2,
         backgroundColor: selected
           ? alpha(theme.palette.primary.main, 0.12)
           : hover
-          ? alpha(theme.palette.text.primary, 0.03)
-          : 'transparent',
+            ? alpha(theme.palette.text.primary, 0.03)
+            : 'background.paper',
         cursor: 'pointer',
-        boxShadow: selected ? `0 0 20px ${alpha(theme.palette.primary.main, 0.25)}` : 'none',
-        maxHeight: 600,
-        overflowY: 'auto',
-        '&::-webkit-scrollbar': {
-          width: 4,
+        boxShadow: selected
+          ? `0 0 20px ${alpha(theme.palette.primary.main, 0.25)}`
+          : 'none',
+        transform: selected ? 'translateY(-2px)' : 'none',
+        transition: theme.transitions.create([
+          'border-color',
+          'background-color',
+          'box-shadow',
+          'transform',
+        ]),
+        '&:focus-visible': {
+          outline: `2px solid ${theme.palette.primary.main}`,
+          outlineOffset: 2,
         },
-        '&::-webkit-scrollbar-track': {
-          background: 'transparent',
-        },
-        '&::-webkit-scrollbar-thumb': {
-          background: theme.palette.primary.main,
-          borderRadius: 4,
-        },
-        '&::before': backgroundImage ? {
-          content: '""',
-          position: 'absolute',
-          inset: 0,
-          zIndex: 0,
-          backgroundImage: `url("${backgroundImage}")`,
-          backgroundPosition: 'right 16px bottom 16px',
-          backgroundRepeat: 'no-repeat',
-          backgroundSize: 'min(52%, 180px)',
-          filter: 'drop-shadow(0 0 12px currentColor)',
-          opacity: selected ? 0.32 : hover ? 0.25 : 0.18,
-          transition: 'opacity 0.3s ease',
-          pointerEvents: 'none',
-        } : undefined,
+        '&::before': backgroundImage
+          ? {
+              content: '""',
+              position: 'absolute',
+              inset: 0,
+              zIndex: -1,
+              backgroundImage: `url("${backgroundImage}")`,
+              backgroundPosition: 'right 12px top 12px',
+              backgroundRepeat: 'no-repeat',
+              backgroundSize: 'min(38%, 116px)',
+              opacity: selected ? 0.28 : hover ? 0.22 : 0.14,
+              pointerEvents: 'none',
+            }
+          : undefined,
       }}
     >
-      {/* Заголовок */}
-      <Box
-        sx={{
-          position: 'sticky',
-          top: 0,
-          backgroundColor: selected
-            ? alpha(theme.palette.primary.main, 0.16)
-            : alpha(theme.palette.background.paper, 0.96),
-          zIndex: 1,
-          pt: 2,
-          paddingBottom: 1.5,
-          backdropFilter: 'blur(4px)',
-          borderRadius: '8px',
-        }}
-      >
+      <Box sx={{ mb: 1.5, pr: backgroundImage ? { xs: 0, sm: 8 } : 0 }}>
         <ClassHeading
           title={name}
-          subtitle={`Основная характеристика: ${primary_ability}`}
-          description={description}
+          description={getShortDescription(description)}
           isSpellcaster={isSpellcaster}
           isMobile={isMobile}
         />
-        <Box sx={{ display: 'none' }}>
-        <Typography
-          variant={isMobile ? 'h6' : 'h5'}
-          sx={{
-            color: theme.palette.secondary.main,
-            fontFamily: '"Cinzel", serif',
-            fontWeight: 700,
-            letterSpacing: '0.04em',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            mb: 0.5,
-          }}
-        >
-          {name}
-          {spellcasting && (
-            <span style={{ fontSize: '0.8rem', color: theme.palette.primary.main }}>✨</span>
-          )}
-        </Typography>
-        <Typography variant="caption" sx={{ color: theme.palette.text.secondary, display: 'block', mb: 0.5 }}>
-          Основная характеристика: {primary_ability}
-        </Typography>
-        <Typography variant="body2" sx={{ color: theme.palette.text.secondary, mb: 1.5, fontSize: '0.9rem' }}>
-          {description}
-        </Typography>
-        <Divider sx={{ borderColor: theme.palette.divider, mb: 1.5 }} />
-        </Box>
       </Box>
 
-      {/* Основные параметры */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0.5, mb: 1.5 }}>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+          gap: 1.25,
+          mb: 1.5,
+        }}
+      >
         <Box>
-          <Typography variant="caption" sx={{ color: theme.palette.primary.main }}>Кость HP</Typography>
-          <Typography variant="body2" sx={{ color: theme.palette.common.white }}>{hit_dice}</Typography>
+          <Typography variant="caption" color="primary.main">Кость HP</Typography>
+          <Typography variant="body2">{hit_dice}</Typography>
         </Box>
         <Box>
-          <Typography variant="caption" sx={{ color: theme.palette.primary.main }}>Осн. хар-ка</Typography>
-          <Typography variant="body2" sx={{ color: theme.palette.common.white }}>{primary_ability}</Typography>
+          <Typography variant="caption" color="primary.main">Осн. хар-ка</Typography>
+          <Typography variant="body2">{primary_ability}</Typography>
         </Box>
         <Box>
-          <Typography variant="caption" sx={{ color: theme.palette.primary.main }}>Спасброски</Typography>
-          <Typography variant="body2" sx={{ color: theme.palette.common.white }}>{proficiencies.saving_throws.join(', ')}</Typography>
+          <Typography variant="caption" color="primary.main">Спасброски</Typography>
+          <Typography variant="body2">{proficiencies.saving_throws.join(', ') || '—'}</Typography>
         </Box>
         <Box>
-          <Typography variant="caption" sx={{ color: theme.palette.primary.main }}>Навыки</Typography>
-          <Typography variant="body2" sx={{ color: theme.palette.common.white }}>
+          <Typography variant="caption" color="primary.main">Навыки</Typography>
+          <Typography variant="body2">
             {proficiencies.skills.number_to_choose} из {proficiencies.skills.list.length}
           </Typography>
         </Box>
       </Box>
 
-      {/* Владения */}
-      {(proficiencies.armor.length > 0 || proficiencies.weapons.length > 0 || proficiencies.tools.length > 0) && (
-        <Box sx={{ mb: 1.5 }}>
-          <Typography variant="caption" sx={{ color: theme.palette.primary.main }}>Владения</Typography>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
-            {proficiencies.armor.map((item) => (
-                      <Chip key={item} label={item} size="small" sx={{ color: theme.palette.common.white, borderColor: theme.palette.divider }} />
-            ))}
-            {proficiencies.weapons.map((item) => (
-                      <Chip key={item} label={item} size="small" sx={{ color: theme.palette.common.white, borderColor: theme.palette.divider }} />
-            ))}
-            {proficiencies.tools.map((item) => (
-                      <Chip key={item} label={item} size="small" sx={{ color: theme.palette.common.white, borderColor: theme.palette.divider }} />
-            ))}
-          </Box>
+      <Box sx={{ mt: 'auto' }}>
+        <Typography variant="caption" color="primary.main">Владения</Typography>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+          {proficiencyItems.length > 0 ? (
+            proficiencyItems.map((item, index) => (
+              <Chip
+                key={`${item}-${index}`}
+                label={item}
+                size="small"
+                variant="outlined"
+              />
+            ))
+          ) : (
+            <Typography variant="body2" color="text.secondary">Нет</Typography>
+          )}
         </Box>
-      )}
-
-      {/* Уровни */}
-      {sortedLevels.length > 0 && (
-        <Box sx={{ mb: 1.5 }}>
-          <Typography variant="caption" sx={{ color: theme.palette.primary.main }}>
-            Уровни (всего {sortedLevels.length})
-          </Typography>
-          <Box sx={{ mt: 0.5 }}>
-            {firstLevels.map((level) => (
-              <Box key={level.level} sx={{ mb: 0.5 }}>
-                <Typography variant="body2" sx={{ color: theme.palette.common.white }}>
-                  Ур. {level.level}: бонус мастерства +{level.proficiency_bonus}
-                  {level.features && level.features.length > 0 && `, фич: ${level.features.length}`}
-                  {level.cantrips_known && `, заговоров: ${level.cantrips_known}`}
-                  {level.spells_known && `, заклинаний: ${level.spells_known}`}
-                  {level.slots && `, слотов: ${level.slots.join('/')}`}
-                </Typography>
-              </Box>
-            ))}
-            {remainingLevels > 0 && (
-              <Typography variant="caption" sx={{ color: theme.palette.primary.main }}>
-                + ещё {remainingLevels} уровней
-              </Typography>
-            )}
-          </Box>
-        </Box>
-      )}
-
-      {/* Особенности */}
-      {features.length > 0 && (
-        <Box sx={{ mb: 1.5 }}>
-          <Typography variant="caption" sx={{ color: theme.palette.primary.main }}>
-            Особенности
-          </Typography>
-          <Box sx={{ mt: 0.5 }}>
-            {firstFeatures.map((feature) => (
-              <Box key={feature.id} sx={{ mb: 0.5 }}>
-                <Typography variant="body2" sx={{ color: theme.palette.common.white, fontWeight: 500 }}>
-                  {feature.name} (ур. {feature.level})
-                </Typography>
-                <Typography variant="caption" sx={{ color: theme.palette.text.secondary, display: 'block' }}>
-                  {feature.description}
-                </Typography>
-              </Box>
-            ))}
-            {remainingFeatures > 0 && (
-              <Typography variant="caption" sx={{ color: theme.palette.primary.main }}>
-                + ещё {remainingFeatures}
-              </Typography>
-            )}
-          </Box>
-        </Box>
-      )}
-
-      {/* Фиксированное снаряжение */}
-      {fixed_equipment && fixed_equipment.length > 0 && (
-        <Box sx={{ mb: 1.5 }}>
-          <Typography variant="caption" sx={{ color: theme.palette.primary.main }}>Вы получаете</Typography>
-          <Box sx={{ mt: 0.5 }}>
-            {fixed_equipment.map((item, idx) => (
-              <Typography key={idx} variant="body2" sx={{ color: theme.palette.common.white }}>
-                • {item.name} {item.count > 1 && `(×${item.count})`}
-              </Typography>
-            ))}
-          </Box>
-        </Box>
-      )}
-
-      {/* Выборы снаряжения */}
-      {choices && choices.length > 0 && (
-        <Box sx={{ mb: 1.5 }}>
-          <Typography variant="caption" sx={{ color: theme.palette.primary.main }}>Выбор снаряжения</Typography>
-          <Box sx={{ mt: 0.5 }}>
-            {choices.slice(0, 2).map((choice, idx) => (
-              <Box key={idx} sx={{ mb: 0.5 }}>
-                <Typography variant="body2" sx={{ color: theme.palette.common.white }}>
-                  {choice.description}
-                </Typography>
-                <Box component="ul" sx={{ m: 0, pl: 2 }}>
-                  {choice.options.slice(0, 2).map((optionGroup, i) => (
-                    <li key={i}>
-                      <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                        {optionGroup.map(item => `${item.name} ${item.count > 1 ? `(×${item.count})` : ''}`).join(', ')}
-                      </Typography>
-                    </li>
-                  ))}
-                  {choice.options.length > 2 && (
-                    <Typography variant="caption" sx={{ color: theme.palette.primary.main }}>
-                      + ещё {choice.options.length - 2} вариантов
-                    </Typography>
-                  )}
-                </Box>
-              </Box>
-            ))}
-            {choices.length > 2 && (
-              <Typography variant="caption" sx={{ color: theme.palette.primary.main }}>
-                + ещё {choices.length - 2} вариантов
-              </Typography>
-            )}
-          </Box>
-        </Box>
-      )}
-
-      {/* Подклассы */}
-      {subclasses.length > 0 && (
-        <Box sx={{ mb: 1.5 }}>
-          <Typography variant="caption" sx={{ color: theme.palette.primary.main }}>Подклассы</Typography>
-          <Box sx={{ mt: 0.5 }}>
-            {subclasses.slice(0, 2).map((sub) => (
-              <Box key={sub.id} sx={{ mb: 0.5 }}>
-                <Typography variant="body2" sx={{ color: theme.palette.common.white }}>{sub.name}</Typography>
-                <Typography variant="caption" sx={{ color: theme.palette.text.secondary, display: 'block' }}>
-                  {sub.description}
-                </Typography>
-              </Box>
-            ))}
-            {subclasses.length > 2 && (
-              <Typography variant="caption" sx={{ color: theme.palette.primary.main }}>
-                + ещё {subclasses.length - 2}
-              </Typography>
-            )}
-          </Box>
-        </Box>
-      )}
-
-      {/* Заклинания */}
-      {isSpellcaster && (
-        <Box sx={{ mb: 1 }}>
-          <Typography variant="caption" sx={{ color: theme.palette.primary.main }}>Заклинания</Typography>
-          <Typography variant="body2" sx={{ color: theme.palette.common.white }}>
-            Способность: {spellcasting.ability}, Фокус: {spellcasting.focus || 'нет'}
-            {spellcasting.ritual_casting && ' (ритуалы)'}
-          </Typography>
-        </Box>
-      )}
-
-      {/* Индикатор выбора */}
-      {selected && (
-        <Box sx={{ mt: 1, p: 1, backgroundColor: alpha(theme.palette.text.primary, 0.05), borderRadius: 1 }}>
-          <Typography variant="caption" sx={{ color: theme.palette.primary.main }}>Выбран</Typography>
-        </Box>
-      )}
+      </Box>
     </Box>
   );
 };
 
-// ==============================
-// Компонент списка классов
-// ==============================
 interface ClassListProps {
   classes: Class[];
   selectedClass: Class | null;
@@ -358,7 +182,7 @@ export const ClassList = ({ classes, selectedClass, onSelect }: ClassListProps) 
   ));
 
   return (
-    <Box sx={{ padding: isMobile ? 1 : 2, width: '100%', boxSizing: 'border-box' }}>
+    <Box sx={{ p: isMobile ? 1 : 2, width: '100%', boxSizing: 'border-box' }}>
       <Typography
         variant={isMobile ? 'h5' : 'h4'}
         sx={{ color: 'text.primary', mb: isMobile ? 2 : 3 }}
@@ -381,21 +205,18 @@ export const ClassList = ({ classes, selectedClass, onSelect }: ClassListProps) 
             sm: 'repeat(2, minmax(0, 1fr))',
             lg: 'repeat(3, minmax(0, 1fr))',
           },
-          gap: 2,
+          columnGap: 2.5,
+          rowGap: 4,
           alignItems: 'stretch',
         }}
       >
-        {filteredClasses.map((cls) => (
-          <Box
-            key={cls._id}
-            sx={{ minWidth: 0 }}
-          >
-            <ClassCard
-              classData={cls}
-              selected={selectedClass?._id === cls._id}
-              onSelect={() => onSelect(cls)}
-            />
-          </Box>
+        {filteredClasses.map((classData) => (
+          <ClassCard
+            key={classData._id}
+            classData={classData}
+            selected={selectedClass?._id === classData._id}
+            onSelect={() => onSelect(classData)}
+          />
         ))}
       </Box>
       {filteredClasses.length === 0 && (

@@ -10,6 +10,7 @@ import rogueBackground from './rogue.webp';
 import sorcererBackground from './sorcerer.webp';
 import warlockBackground from './warlock.webp';
 import wizardBackground from './wizard.webp';
+import artificerBackground from './artificer.webp';
 
 const classBackgroundImages: Record<string, string> = {
   'Бард': bardBackground,
@@ -24,6 +25,7 @@ const classBackgroundImages: Record<string, string> = {
   'Колдун': warlockBackground,
   'Жрец': clericBackground,
   'Друид': druidBackground,
+  'Изобретатель': artificerBackground,
 };
 
 export const getClassBackgroundImage = (className: string) => classBackgroundImages[className];

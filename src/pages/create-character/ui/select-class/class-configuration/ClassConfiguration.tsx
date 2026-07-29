@@ -12,11 +12,9 @@ import { useEquipmentSelection } from './hooks/useEquipmentSelection';
 import { EquipmentChoices } from './ui/EquipmentChoices';
 import { SpellSelection } from './ui/SpellSelection';
 import { FixedEquipmentDisplay } from './ui/FixedEquipmentDisplay';
-import { SubclassSelection } from './ui/SubclassSelection';
 import { InstrumentSelection } from './ui/InstrumentSelection';
 import { recommendedSpells } from './constants';
 import { hasSpellcasting } from '../spellcastingUtils';
-import { getSubclassUnlockLevel } from './subclassUtils';
 
 interface ClassConfigurationProps {
   classData: Class;
@@ -29,21 +27,20 @@ interface ClassConfigurationProps {
     spells1: Spell[];
   } | null) => void;
   selectSkills?: boolean;
-  characterLevel?: number;
+  section?: 'class' | 'equipment' | 'magic';
+  selectedSubclass?: string;
 }
 
 export const ClassConfiguration = ({
   classData,
   onConfigurationChange,
   selectSkills = true,
-  characterLevel = 1,
+  section = 'class',
+  selectedSubclass,
 }: ClassConfigurationProps) => {
   const theme = useTheme();
-  const { proficiencies, subclasses, spellcasting, name, fixed_equipment, choices } = classData;
+  const { proficiencies, spellcasting, name, fixed_equipment, choices } = classData;
   const isSpellcaster = hasSpellcasting(spellcasting);
-  const availableSubclasses = subclasses.filter(
-    (subclass) => getSubclassUnlockLevel(subclass) <= characterLevel,
-  );
 
   const { cantripsToChoose, spells1ToChoose } = useSpellCounts(classData);
 
@@ -65,9 +62,6 @@ export const ClassConfiguration = ({
   const spell1Filter = useSpellFilter(spellsData?.spells1);
 
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
-  const [selectedSubclass, setSelectedSubclass] = useState<string>(
-    availableSubclasses[0]?.id ?? '',
-  );
   const [selectedInstruments, setSelectedInstruments] = useState<string[]>([]);
   const [selectedCantrips, setSelectedCantrips] = useState<Spell[]>([]);
   const [selectedSpells1, setSelectedSpells1] = useState<Spell[]>([]);
@@ -101,10 +95,6 @@ export const ClassConfiguration = ({
     setSelectedSkills(prev =>
       prev.includes(skillName) ? prev.filter(s => s !== skillName) : [...prev, skillName]
     );
-  };
-
-  const handleSubclassChange = (subclassId: string) => {
-    setSelectedSubclass(subclassId);
   };
 
   const handleInstrumentChange = (event: SelectChangeEvent<string[]>) => {
@@ -178,7 +168,6 @@ export const ClassConfiguration = ({
       if (items.length > 1 && selection.specificItemIds.length === 0) return false;
     }
 
-    if (availableSubclasses.length > 0 && !selectedSubclass) return false;
     if (instrumentCount > 0 && selectedInstruments.length < instrumentCount) return false;
     if (cantripsToChoose > 0 && selectedCantrips.length < cantripsToChoose) return false;
     if (spells1ToChoose > 0 && selectedSpells1.length < spells1ToChoose) return false;
@@ -224,7 +213,7 @@ export const ClassConfiguration = ({
     return {
       skills: selectSkills ? selectedSkills : [],
       equipment,
-      subclass: availableSubclasses.length > 0 ? selectedSubclass : undefined,
+      subclass: selectedSubclass || undefined,
       instruments: instrumentCount > 0 ? selectedInstruments : undefined,
       cantrips: selectedCantrips,
       spells1: selectedSpells1,
@@ -265,7 +254,28 @@ export const ClassConfiguration = ({
       </Box>
       {error && <Typography color="error" sx={{ mb: 2 }}>Ошибка: {error}</Typography>}
 
-      {selectSkills && proficiencies.skills.number_to_choose > 0 && (
+      {section === 'class' && (
+        <Box
+          sx={{
+            p: 2,
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 2,
+            bgcolor: 'background.paper',
+          }}
+        >
+          <Typography variant="h6" sx={{ mb: 0.5 }}>
+            Класс выбран
+          </Typography>
+          <Typography color="text.secondary">
+            На следующем шаге выберите стартовое снаряжение и инструменты.
+            Заклинания и заговоры будут доступны отдельной страницей после него.
+            Подкласс выбирается при достижении нужного уровня в окне повышения уровня.
+          </Typography>
+        </Box>
+      )}
+
+      {section === 'class' && selectSkills && proficiencies.skills.number_to_choose > 0 && (
         <SelectSkills
           proficiencies={proficiencies}
           selectedSkills={selectedSkills}
@@ -273,31 +283,27 @@ export const ClassConfiguration = ({
         />
       )}
 
-      <FixedEquipmentDisplay fixedEquipment={fixed_equipment} />
+      {section === 'equipment' && (
+        <>
+          <Typography variant="h5" sx={{ mb: 2 }}>Выбор снаряжения</Typography>
+          <FixedEquipmentDisplay fixedEquipment={fixed_equipment} />
+          <EquipmentChoices
+            choices={choices}
+            selectedEquipment={selectedEquipment}
+            loadedItems={loadedItems}
+            itemSearchQueries={itemSearchQueries}
+            setItemSearchQuery={setItemSearchQuery}
+            filterWeaponItems={filterWeaponItems}
+            filterItems={filterItems}
+            handleEquipmentOptionSelect={handleEquipmentOptionSelect}
+            handleSpecificItemSelect={handleSpecificItemSelect}
+            handleRemoveSpecificItem={handleRemoveSpecificItem}
+          />
+          <InstrumentSelection instrumentCount={instrumentCount} selectedInstruments={selectedInstruments} onChange={handleInstrumentChange} />
+        </>
+      )}
 
-      <EquipmentChoices
-        choices={choices}
-        selectedEquipment={selectedEquipment}
-        loadedItems={loadedItems}
-        itemSearchQueries={itemSearchQueries}
-        setItemSearchQuery={setItemSearchQuery}
-        filterWeaponItems={filterWeaponItems}
-        filterItems={filterItems}
-        handleEquipmentOptionSelect={handleEquipmentOptionSelect}
-        handleSpecificItemSelect={handleSpecificItemSelect}
-        handleRemoveSpecificItem={handleRemoveSpecificItem}
-      />
-
-      <SubclassSelection
-        subclasses={subclasses}
-        selectedSubclass={selectedSubclass}
-        currentLevel={characterLevel}
-        onChange={handleSubclassChange}
-      />
-
-      <InstrumentSelection instrumentCount={instrumentCount} selectedInstruments={selectedInstruments} onChange={handleInstrumentChange} />
-
-      {isSpellcaster && cantripsToChoose > 0 && (
+      {section === 'magic' && isSpellcaster && cantripsToChoose > 0 && (
         <SpellSelection
           title="Выберите заговоры"
           spells={cantripFilter.filteredSpells}
@@ -317,7 +323,7 @@ export const ClassConfiguration = ({
         />
       )}
 
-      {isSpellcaster && spells1ToChoose > 0 && (
+      {section === 'magic' && isSpellcaster && spells1ToChoose > 0 && (
         <SpellSelection
           title="Выберите заклинания 1-го уровня"
           spells={spell1Filter.filteredSpells}

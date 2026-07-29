@@ -9,7 +9,7 @@ import {
   Typography,
 } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
-import { useState } from 'react';
+import type { KeyboardEvent } from 'react';
 import type { Subclass } from '../../../../../../api';
 import { getSubclassUnlockLevel } from '../subclassUtils';
 import { SubclassSpellsCard } from './SubclassSpellsCard';
@@ -21,14 +21,6 @@ interface SubclassSelectionProps {
   onChange: (subclassId: string) => void;
 }
 
-const getShortDescription = (description: string) => {
-  const normalizedDescription = description.replace(/\s+/g, ' ').trim();
-  const maxLength = 180;
-
-  if (normalizedDescription.length <= maxLength) return normalizedDescription;
-  return `${normalizedDescription.slice(0, maxLength).trimEnd()}…`;
-};
-
 export const SubclassSelection = ({
   subclasses,
   selectedSubclass,
@@ -36,114 +28,128 @@ export const SubclassSelection = ({
   onChange,
 }: SubclassSelectionProps) => {
   const theme = useTheme();
-  const [expandedSubclass, setExpandedSubclass] = useState(selectedSubclass);
 
   if (subclasses.length === 0) return null;
 
+  const handleKeyboardSelect = (
+    event: KeyboardEvent<HTMLElement>,
+    subclassId: string,
+    isAvailable: boolean,
+  ) => {
+    if (!isAvailable || (event.key !== 'Enter' && event.key !== ' ')) return;
+    event.preventDefault();
+    onChange(subclassId);
+  };
+
   return (
-    <Box component="section" aria-labelledby="subclass-selection-title" sx={{ mb: 3 }}>
+    <Box component="section" aria-labelledby="subclass-selection-title">
       <Typography id="subclass-selection-title" variant="h6" sx={{ mb: 0.5 }}>
-        Выберите подкласс
+        Подклассы
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Подкласс определяет способности персонажа и их развитие. Выбор доступен только после
-        достижения требуемого уровня.
+        Выберите доступный подкласс или изучите варианты, которые откроются на следующих уровнях.
       </Typography>
 
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
+          gridTemplateColumns: {
+            xs: '1fr',
+            md: 'repeat(2, minmax(0, 1fr))',
+          },
           gap: 2,
-          maxHeight: { xs: '68vh', sm: '76vh' },
-          overflowY: 'auto',
-          pr: 1,
-          '&::-webkit-scrollbar': {
-            width: 6,
-          },
-          '&::-webkit-scrollbar-track': {
-            backgroundColor: 'transparent',
-          },
-          '&::-webkit-scrollbar-thumb': {
-            backgroundColor: 'primary.main',
-            borderRadius: 1,
-          },
+          alignItems: 'stretch',
         }}
       >
         {subclasses.map((subclass) => {
           const unlockLevel = getSubclassUnlockLevel(subclass);
           const isAvailable = unlockLevel <= currentLevel;
           const selected = selectedSubclass === subclass.id;
-          const expanded = expandedSubclass === subclass.id;
-          const features = [...subclass.features].sort((first, second) => first.level - second.level);
+          const features = [...subclass.features].sort(
+            (first, second) => first.level - second.level,
+          );
 
           return (
             <Card
               key={subclass.id}
-              component="label"
+              component="article"
               variant="outlined"
-              onClick={() => setExpandedSubclass(subclass.id)}
+              role={isAvailable ? 'radio' : undefined}
+              aria-checked={isAvailable ? selected : undefined}
+              aria-disabled={!isAvailable}
+              tabIndex={isAvailable ? 0 : -1}
+              onClick={() => {
+                if (isAvailable) onChange(subclass.id);
+              }}
+              onKeyDown={(event) => handleKeyboardSelect(event, subclass.id, isAvailable)}
               sx={{
-                cursor: 'pointer',
-                borderColor: selected ? 'primary.main' : expanded ? 'secondary.main' : 'divider',
+                position: 'relative',
+                display: 'flex',
+                minWidth: 0,
+                height: { xs: 500, sm: 540 },
+                cursor: isAvailable ? 'pointer' : 'default',
+                borderWidth: 2,
+                borderColor: selected ? 'primary.main' : 'divider',
                 backgroundColor: selected
                   ? alpha(theme.palette.primary.main, 0.1)
                   : 'background.paper',
-                opacity: isAvailable ? 1 : 0.72,
-                height: expanded ? { xs: '62vh', sm: '70vh' } : undefined,
-                maxHeight: expanded ? { xs: '62vh', sm: '70vh' } : undefined,
-                overflowY: expanded ? 'auto' : 'visible',
-                pr: expanded ? 0.5 : 0,
-                transition: theme.transitions.create(['border-color', 'background-color']),
-                '&:hover': {
-                  borderColor: isAvailable
-                    ? selected
-                      ? 'primary.main'
-                      : 'secondary.main'
-                    : 'divider',
-                },
-                '&::-webkit-scrollbar': {
-                  width: 6,
-                },
-                '&::-webkit-scrollbar-track': {
-                  backgroundColor: 'transparent',
-                },
-                '&::-webkit-scrollbar-thumb': {
-                  backgroundColor: 'primary.main',
-                  borderRadius: 1,
+                opacity: isAvailable ? 1 : 0.7,
+                boxShadow: selected
+                  ? `0 0 20px ${alpha(theme.palette.primary.main, 0.2)}`
+                  : 'none',
+                transition: theme.transitions.create([
+                  'border-color',
+                  'background-color',
+                  'box-shadow',
+                  'transform',
+                ]),
+                '&:hover': isAvailable
+                  ? {
+                      borderColor: selected ? 'primary.main' : 'primary.light',
+                      transform: 'translateY(-2px)',
+                    }
+                  : undefined,
+                '&:focus-visible': {
+                  outline: `2px solid ${theme.palette.primary.main}`,
+                  outlineOffset: 2,
                 },
               }}
             >
-              <CardContent>
+              <CardContent
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  width: '100%',
+                  minWidth: 0,
+                  p: 2,
+                  '&:last-child': { pb: 2 },
+                }}
+              >
                 <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
                   <Radio
                     checked={selected}
                     value={subclass.id}
                     disabled={!isAvailable}
                     onChange={() => onChange(subclass.id)}
+                    onClick={(event) => event.stopPropagation()}
                     slotProps={{ input: { 'aria-label': `Выбрать подкласс ${subclass.name}` } }}
                     sx={{ mt: -0.75, ml: -1 }}
                   />
-                  <Box sx={{ flex: 1 }}>
-                    <Typography variant="h6" component="h3">
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography variant="h6" component="h3" sx={{ lineHeight: 1.25 }}>
                       {subclass.name}
                     </Typography>
                     <Chip
                       label={
                         isAvailable
                           ? `Доступен на ${unlockLevel}-м уровне`
-                          : `Доступен с ${unlockLevel}-го уровня`
+                          : `Откроется с ${unlockLevel}-го уровня`
                       }
                       color={isAvailable ? 'secondary' : 'default'}
                       size="small"
                       variant="outlined"
-                      sx={{ mt: 0.5 }}
+                      sx={{ mt: 1 }}
                     />
-                    {selected && subclass.source && (
-                      <Typography variant="caption" color="text.secondary">
-                        Источник: {subclass.source}
-                      </Typography>
-                    )}
                   </Box>
                 </Box>
 
@@ -151,56 +157,68 @@ export const SubclassSelection = ({
                   <Typography
                     variant="body2"
                     color="text.secondary"
-                    sx={{ whiteSpace: 'pre-line', mt: 1 }}
+                    sx={{ whiteSpace: 'pre-line', mt: 1.5 }}
                   >
-                    {expanded ? subclass.description : getShortDescription(subclass.description)}
+                    {subclass.description}
                   </Typography>
                 )}
 
-                {expanded && (
-                  <>
-                    <Divider sx={{ my: 2 }} />
+                <Divider sx={{ my: 2 }} />
 
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                      Способности подкласса
+                <Box
+                  sx={{
+                    flex: 1,
+                    minHeight: 0,
+                    overflowY: 'auto',
+                    pr: 1,
+                    '&::-webkit-scrollbar': { width: 6 },
+                    '&::-webkit-scrollbar-track': { backgroundColor: 'transparent' },
+                    '&::-webkit-scrollbar-thumb': {
+                      backgroundColor: 'primary.main',
+                      borderRadius: 1,
+                    },
+                  }}
+                >
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    Способности подкласса
+                  </Typography>
+                  {features.length > 0 ? (
+                    <Stack component="ul" spacing={1.5} sx={{ listStyle: 'none', m: 0, p: 0 }}>
+                      {features.map((feature) => (
+                        <Box component="li" key={`${feature.level}-${feature.name}`}>
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            sx={{ mb: 0.5, alignItems: 'center' }}
+                          >
+                            <Chip
+                              label={`${feature.level} уровень`}
+                              color="secondary"
+                              size="small"
+                              variant="outlined"
+                            />
+                            <Typography variant="subtitle2">{feature.name}</Typography>
+                          </Stack>
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ whiteSpace: 'pre-line' }}
+                          >
+                            {feature.description}
+                          </Typography>
+                        </Box>
+                      ))}
+                    </Stack>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">
+                      Способности для этого подкласса пока не добавлены в справочник.
                     </Typography>
-                    {features.length > 0 ? (
-                      <Stack component="ul" spacing={1.5} sx={{ listStyle: 'none', m: 0, p: 0 }}>
-                        {features.map((feature) => (
-                          <Box component="li" key={`${feature.level}-${feature.name}`}>
-                            <Stack
-                              direction="row"
-                              spacing={1}
-                              sx={{ mb: 0.5, alignItems: 'center' }}
-                            >
-                              <Chip
-                                label={`${feature.level} уровень`}
-                                color="secondary"
-                                size="small"
-                                variant="outlined"
-                              />
-                              <Typography variant="subtitle2">{feature.name}</Typography>
-                            </Stack>
-                            <Typography
-                              variant="body2"
-                              color="text.secondary"
-                              sx={{ whiteSpace: 'pre-line' }}
-                            >
-                              {feature.description}
-                            </Typography>
-                          </Box>
-                        ))}
-                      </Stack>
-                    ) : (
-                      <Typography variant="body2" color="text.secondary">
-                        Способности для этого подкласса пока не добавлены в справочник.
-                      </Typography>
-                    )}
-                    {subclass.class_spells && subclass.class_spells.length > 0 && (
-                      <SubclassSpellsCard spellProgression={subclass.class_spells} />
-                    )}
-                  </>
-                )}
+                  )}
+
+                  {subclass.class_spells && subclass.class_spells.length > 0 && (
+                    <SubclassSpellsCard spellProgression={subclass.class_spells} />
+                  )}
+                </Box>
               </CardContent>
             </Card>
           );

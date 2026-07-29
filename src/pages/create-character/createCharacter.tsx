@@ -33,6 +33,8 @@ import { NavigationMenu } from "../../components/NavigationMenu";
 const steps = [
   "Выбор расы",
   "Выбор класса",
+  "Выбор снаряжения",
+  "Выбор заклинаний",
   "Выбор происхождения",
   "Черты характера",
   "Характеристики",
@@ -98,21 +100,22 @@ const CreateCharacter = () => {
 
   const handleNext = async () => {
     if (activeStep === 0 && !selectedRace) return;
-    if (activeStep === 1 && (!selectedClass || !classConfiguration)) return;
+    if (activeStep === 1 && !selectedClass) return;
+    if (activeStep === 3 && !classConfiguration) return;
     if (
-      activeStep === 2
+      activeStep === 4
       && (!selectedBackground
         || selectedBackgroundLanguages.length !== getBackgroundLanguageChoiceCount(selectedBackground.languages))
     ) return;
-    if (activeStep === 3 && !selectedPersonality) return;
+    if (activeStep === 5 && !selectedPersonality) return;
     if (
-      activeStep === 4 &&
+      activeStep === 6 &&
       (!isAbilityScoresValid(abilityScores) ||
         !isSkillSelectionValid(selectedSkills, selectedClass))
     ) {
       return;
     }
-    if (activeStep === 5 && !selectedAlignment) return;
+    if (activeStep === 7 && !selectedAlignment) return;
     if (activeStep === steps.length - 1) {
       await characterSheetRef.current?.saveCharacter();
       return;
@@ -127,31 +130,38 @@ const CreateCharacter = () => {
 
   const isStepValid = () => {
     if (activeStep === 0) return !!selectedRace;
-    if (activeStep === 1) return !!selectedClass && !!classConfiguration;
-    if (activeStep === 2) {
+    if (activeStep === 1) return !!selectedClass;
+    if (activeStep === 2) return true;
+    if (activeStep === 3) return !!classConfiguration;
+    if (activeStep === 4) {
       return !!selectedBackground
         && selectedBackgroundLanguages.length === getBackgroundLanguageChoiceCount(selectedBackground.languages);
     }
-    if (activeStep === 3) return !!selectedPersonality;
-    if (activeStep === 4) {
+    if (activeStep === 5) return !!selectedPersonality;
+    if (activeStep === 6) {
       return (
         isAbilityScoresValid(abilityScores) &&
         isSkillSelectionValid(selectedSkills, selectedClass)
       );
     }
-    if (activeStep === 5) return !!selectedAlignment;
+    if (activeStep === 7) return !!selectedAlignment;
     if (activeStep === steps.length - 1) return !!characterName.trim();
     return true;
   };
 
   const handleSelectClass = (cls: Class, configuration: ClassConfiguration) => {
+    setSelectedClass(cls);
+    setClassConfiguration(configuration);
+  };
+
+  const handleClassSelected = (cls: Class) => {
     if (selectedClass?._id !== cls._id) {
       setAbilityScores(createAbilityScores(cls.recommended_stats));
       setSelectedSkills([]);
       setCurrentHitPoints(null);
     }
     setSelectedClass(cls);
-    setClassConfiguration(configuration);
+    setClassConfiguration(null);
   };
 
   const handleClassConfigurationStart = () => {
@@ -239,15 +249,17 @@ const CreateCharacter = () => {
             onSelectRace={handleSelectRace}
           />
         )}
-        {activeStep === 1 && (
+        <Box sx={{ display: activeStep >= 1 && activeStep <= 3 ? 'block' : 'none' }}>
           <ClassSelection
             classes={classes || []}
             onSelect={handleSelectClass}
+            onClassSelected={handleClassSelected}
             onConfigurationChange={setClassConfiguration}
             onConfigurationStart={handleClassConfigurationStart}
+            section={activeStep === 2 ? 'equipment' : activeStep === 3 ? 'magic' : 'class'}
           />
-        )}
-        {activeStep === 2 && (
+        </Box>
+        {activeStep === 4 && (
           <SelectBackground
             backgrounds={backgrounds || []}
             languages={(languages ?? []) as Language[]}
@@ -257,13 +269,13 @@ const CreateCharacter = () => {
             onSelectedBackgroundLanguagesChange={setSelectedBackgroundLanguages}
           />
         )}
-        {activeStep === 3 && selectedBackground && (
+        {activeStep === 5 && selectedBackground && (
           <SelectPersonality
             personality={selectedBackground.suggested_personality}
             onConfirm={setSelectedPersonality}
           />
         )}
-        {activeStep === 4 && selectedClass && selectedRace && selectedBackground && abilityScores && (
+        {activeStep === 6 && selectedClass && selectedRace && selectedBackground && abilityScores && (
           <SelectAbilities
             selectedClass={selectedClass}
             selectedRace={selectedRace}
@@ -274,14 +286,14 @@ const CreateCharacter = () => {
             onSkillsChange={setSelectedSkills}
           />
         )}
-        {activeStep === 5 && (
+        {activeStep === 7 && (
           <SelectAlignment
             alignments={alignments || []}
             selectedAlignment={selectedAlignment}
             onSelectAlignment={setSelectedAlignment}
           />
         )}
-        {activeStep === 6 &&
+        {activeStep === 8 &&
           selectedClass &&
           selectedRace &&
           selectedBackground &&
