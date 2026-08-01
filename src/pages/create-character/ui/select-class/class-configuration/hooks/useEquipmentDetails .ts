@@ -2,11 +2,11 @@
 import { useState, useEffect } from 'react';
 import { fetchEquipmentDetails } from '../../../../../../api/equipment';
 import type { Weapon, Armor, Item, Tool } from '../../../../../../api';
-import type { EquipmentType } from '../../../../../../api/equipment';
+import type { EquipmentType, TradeGoodEquipment } from '../../../../../../api/equipment';
 
 export interface EquipmentDetails {
   type: EquipmentType;
-  data: Weapon | Armor | Item | Tool | null;
+  data: Weapon | Armor | Item | Tool | TradeGoodEquipment | null;
 }
 
 export const useEquipmentDetails = (itemName: string) => {
