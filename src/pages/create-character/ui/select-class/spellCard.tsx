@@ -23,6 +23,7 @@ interface SpellCardProps {
   onToggle: () => void;
   disabled?: boolean;
   recommended?: boolean;
+  readOnly?: boolean;
 }
 
 const damageIcons: Record<string, { icon: string; color: string; label: string }> = {
@@ -51,11 +52,11 @@ const damageIcons: Record<string, { icon: string; color: string; label: string }
   'Ядом': { icon: PoisonIcon, color: '#E0F296', label: 'Яд' },
 };
 
-export const SpellCard = memo(({ spell, selected, onToggle, disabled = false, recommended = false }: SpellCardProps) => {
+export const SpellCard = memo(({ spell, selected, onToggle, disabled = false, recommended = false, readOnly = false }: SpellCardProps) => {
   const theme = useTheme();
 
   const handleClick = () => {
-    if (!disabled) onToggle();
+    if (!disabled && !readOnly) onToggle();
   };
 
   const damageInfo = spell.damage_type ? damageIcons[spell.damage_type] : null;
@@ -102,15 +103,16 @@ export const SpellCard = memo(({ spell, selected, onToggle, disabled = false, re
         backgroundColor: selected
           ? 'rgba(170, 59, 255, 0.12)'
           : 'transparent',
-        cursor: disabled ? 'default' : 'pointer',
+        cursor: disabled || readOnly ? 'default' : 'pointer',
         transition: 'all 0.25s ease',
         '&:hover': {
           borderColor: disabled ? 'rgba(255,255,255,0.08)' : hoverBorderColor,
           backgroundColor: disabled ? 'transparent' : 'rgba(255,255,255,0.03)',
-          transform: disabled ? 'scale(1)' : 'scale(1.02)',
+          transform: disabled || readOnly ? 'scale(1)' : 'scale(1.02)',
         },
         opacity: disabled ? 0.5 : 1,
-        pointerEvents: disabled ? 'none' : 'auto',
+        // Затемнённые карточки в листе персонажа остаются прокручиваемыми и читаемыми.
+        pointerEvents: 'auto',
         display: 'flex',
         flexDirection: 'column',
         gap: 0.5,

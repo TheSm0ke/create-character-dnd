@@ -10,8 +10,10 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { Spell } from '../../../../api';
+import { damageDetails } from '../select-class/class-configuration/constants';
 
 interface SummaryCardProps {
   title: string;
@@ -77,8 +79,11 @@ export const SpellList = ({ title, spells }: { title: string; spells: Spell[] })
     <Typography variant="subtitle2" sx={{ mb: 0.75 }}>{title}</Typography>
     {spells.length > 0 ? (
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 1 }}>
-        {spells.map((spell) => (
-          <Tooltip
+        {spells.map((spell) => {
+          const damageInfo = spell.damage_type ? damageDetails[spell.damage_type] : undefined;
+
+          return (
+            <Tooltip
             key={spell._id}
             arrow
             enterTouchDelay={0}
@@ -113,16 +118,22 @@ export const SpellList = ({ title, spells }: { title: string; spells: Spell[] })
               aria-label={`${spell.name}. Стоимость: ${getSpellCost(spell)}.`}
               sx={{
                 minWidth: 0, p: 1, cursor: 'help', transition: 'background-color 150ms ease, border-color 150ms ease',
-                '&:hover, &:focus-visible': { borderColor: 'primary.main', backgroundColor: 'action.hover' },
+                '&:hover, &:focus-visible': { borderColor: damageInfo?.color ?? 'primary.main', backgroundColor: 'action.hover' },
               }}
             >
               <Typography variant="subtitle2" noWrap title={spell.name}>{spell.name}</Typography>
               <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 0.5, mb: 0 }}>Стоимость: {getSpellCost(spell)}</Typography>
               <Typography variant="caption" color="text.secondary" component="p" sx={{ m: 0 }}>Урон: {spell.damage_dice || '—'}</Typography>
-              <Typography variant="caption" color="text.secondary" component="p" sx={{ m: 0 }}>Тип урона: {spell.damage_type || '—'}</Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minHeight: 20 }}>
+                <Typography variant="caption" color="text.secondary" component="p" sx={{ m: 0 }}>
+                  Тип урона: {spell.damage_type || '—'}
+                </Typography>
+                {damageInfo && <Box component="img" src={damageInfo.icon} alt={damageInfo.label} sx={{ width: 16, height: 16 }} />}
+              </Box>
             </Paper>
           </Tooltip>
-        ))}
+          );
+        })}
       </Box>
     ) : <Typography variant="body2" color="text.secondary">Не выбрано.</Typography>}
   </Box>
@@ -138,8 +149,21 @@ const toRomanNumeral = (value: number) => {
   }, '');
 };
 
-export const SpellSlots = ({ slots }: { slots?: number[] }) => {
+export const SpellSlots = ({
+  slots,
+  onAvailabilityChange,
+}: {
+  slots?: number[];
+  onAvailabilityChange?: (remainingSlots: number[]) => void;
+}) => {
   const slotGroups = (slots ?? []).map((count, index) => ({ spellLevel: index + 1, count })).filter(({ count }) => count > 0);
+  const [spentSlots, setSpentSlots] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    onAvailabilityChange?.((slots ?? []).map((count, index) => {
+      const spent = Array.from({ length: count }).filter((_, slotIndex) => spentSlots[`${index + 1}-${slotIndex}`]).length;
+      return count - spent;
+    }));
+  }, [onAvailabilityChange, slots, spentSlots]);
   if (slotGroups.length === 0) return <Typography variant="body2" color="text.secondary">Нет ячеек.</Typography>;
 
   return (
@@ -165,19 +189,37 @@ export const SpellSlots = ({ slots }: { slots?: number[] }) => {
           >
             {toRomanNumeral(spellLevel)}
           </Box>
-          {Array.from({ length: count }, (_, slotIndex) => (
-            <Box key={slotIndex} role="img" aria-label={`Ячейка ${slotIndex + 1} из ${count}: доступна`} sx={{
-              width: 22, height: 22, border: '1px solid', borderColor: 'primary.light', backgroundColor: 'primary.main',
-              boxShadow: (theme) => `0 0 10px ${theme.palette.primary.main}`,
-            }} />
-          ))}
+          {Array.from({ length: count }, (_, slotIndex) => {
+            const slotKey = `${spellLevel}-${slotIndex}`;
+            const isSpent = spentSlots[slotKey] ?? false;
+
+            return (
+              <Box
+                key={slotKey}
+                component="button"
+                type="button"
+                aria-pressed={!isSpent}
+                aria-label={`Ячейка ${slotIndex + 1} из ${count}, ${isSpent ? 'потрачена' : 'доступна'}`}
+                onClick={() => setSpentSlots((current) => ({ ...current, [slotKey]: !isSpent }))}
+                sx={{
+                  width: 22, height: 22, p: 0, border: '1px solid', cursor: 'pointer', transition: 'all 150ms ease',
+                  borderColor: isSpent ? 'divider' : 'primary.light', backgroundColor: isSpent ? 'action.disabledBackground' : 'primary.main',
+                  boxShadow: isSpent ? 'none' : (theme) => `0 0 10px ${theme.palette.primary.main}`,
+                  '&:hover, &:focus-visible': { transform: 'scale(1.08)', outline: 'none', borderColor: 'primary.light' },
+                }}
+              />
+            );
+          })}
         </Paper>
       ))}
     </Box>
   );
 };
 
-export const KiPoints = ({ points }: { points: number }) => (
+export const KiPoints = ({ points }: { points: number }) => {
+  const [spentPoints, setSpentPoints] = useState<Record<number, boolean>>({});
+
+  return (
   <Box aria-label={`Очки ци: ${points}`} sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, mt: 1 }}>
     <Paper
       variant="outlined"
@@ -198,17 +240,27 @@ export const KiPoints = ({ points }: { points: number }) => (
       >
         Ц
       </Box>
-      {Array.from({ length: points }, (_, pointIndex) => (
-        <Box
-          key={pointIndex}
-          role="img"
-          aria-label={`Очко ци ${pointIndex + 1} из ${points}: доступно`}
-          sx={{
-            width: 22, height: 22, border: '1px solid', borderColor: 'primary.light',
-            backgroundColor: 'primary.main', boxShadow: (theme) => `0 0 10px ${theme.palette.primary.main}`,
-          }}
-        />
-      ))}
+      {Array.from({ length: points }, (_, pointIndex) => {
+        const isSpent = spentPoints[pointIndex] ?? false;
+
+        return (
+          <Box
+            key={pointIndex}
+            component="button"
+            type="button"
+            aria-pressed={!isSpent}
+            aria-label={`Очко ци ${pointIndex + 1} из ${points}, ${isSpent ? 'потрачено' : 'доступно'}`}
+            onClick={() => setSpentPoints((current) => ({ ...current, [pointIndex]: !isSpent }))}
+            sx={{
+              width: 22, height: 22, p: 0, border: '1px solid', cursor: 'pointer', transition: 'all 150ms ease',
+              borderColor: isSpent ? 'divider' : 'primary.light', backgroundColor: isSpent ? 'action.disabledBackground' : 'primary.main',
+              boxShadow: isSpent ? 'none' : (theme) => `0 0 10px ${theme.palette.primary.main}`,
+              '&:hover, &:focus-visible': { transform: 'scale(1.08)', outline: 'none', borderColor: 'primary.light' },
+            }}
+          />
+        );
+      })}
     </Paper>
   </Box>
-);
+  );
+};

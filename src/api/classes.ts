@@ -48,6 +48,27 @@ export interface Spellcasting {
   slots_note?: string;
   spellbook?: boolean;
   spells_known_note?: string;
+  advancement?: {
+    kind: 'full' | 'half' | 'pact' | 'third';
+    spell_selection: 'known' | 'prepared' | 'spellbook';
+    spell_list_class: string;
+    spells_learned_progression?: number[];
+  };
+  special_spell_choices?: {
+    level: number;
+    count: number;
+    spell_level: number;
+    spell_list_class?: string;
+    any_class?: boolean;
+    title: string;
+  }[];
+}
+
+export interface SpellGrant {
+  level_requirement: number;
+  spells: string[];
+  mode: 'automatic' | 'expanded_list';
+  note?: string;
 }
 
 export interface LevelInfo {
@@ -90,6 +111,8 @@ export interface Subclass {
     level_requirement: number;
     spells: string[];
   }[];
+  spell_grants?: SpellGrant[];
+  spellcasting?: Spellcasting;
   source?: string;
   special_tables?: {
     options: {

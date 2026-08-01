@@ -23,7 +23,6 @@ import {
   Tab,
   Tabs,
   TextField,
-  Tooltip,
   Typography,
   Button,
 } from '@mui/material';
@@ -32,6 +31,7 @@ import {
   fetchArmors,
   fetchFeats,
   fetchSpellsByClassAndLevel,
+  searchSpells,
   fetchSkills,
   fetchWeapons,
   createCharacter,
@@ -46,6 +46,7 @@ import {
   type CreateCharacterPayload,
   type Race,
   type Spell,
+  type SpellGrant,
   type Weapon,
 } from '../../../../api';
 import { useFetch } from '../../../../api/useFetch';
@@ -54,6 +55,9 @@ import type { AbilityScores } from '../select-abilities';
 import type { ClassConfiguration } from '../select-class/classSelection';
 import { getClassBackgroundImage } from '../../../../assets/class-icons';
 import { SubclassSelection } from '../select-class/class-configuration/ui/SubclassSelection';
+import { SpellSelection } from '../select-class/class-configuration/ui/SpellSelection';
+import { SpellCard } from '../select-class/spellCard';
+import { damageIcons } from '../select-class/class-configuration/constants';
 import { getSubclassUnlockLevel } from '../select-class/class-configuration/subclassUtils';
 import { FeatureList, KiPoints, SpellSlots, SummaryCard } from './SheetPrimitives';
 
@@ -62,6 +66,15 @@ interface Personality {
   ideals: string[];
   bonds: string[];
   flaws: string[];
+}
+
+interface SpecialSpellChoice {
+  level: number;
+  count: number;
+  spell_level: number;
+  spell_list_class?: string;
+  any_class?: boolean;
+  title: string;
 }
 
 interface CharacterSheetProps {
@@ -114,6 +127,15 @@ const ABILITIES: Array<{ key: AbilityKey; name: string; abbreviation: string }> 
 const normalize = (value: string) =>
   value.trim().toLocaleLowerCase('ru-RU').replace(/ё/g, 'е');
 
+const filterLevelSpells = (spells: Spell[], query: string, damageType: string | null, damageDice: string | null) => {
+  const normalizedQuery = normalize(query);
+  return spells.filter((spell) => (
+    (!normalizedQuery || normalize(spell.name).includes(normalizedQuery))
+    && (!damageType || spell.damage_type === damageType)
+    && (!damageDice || spell.damage_dice === damageDice)
+  ));
+};
+
 const abilityKeyFromName = (value: string): AbilityKey | undefined => {
   const normalized = normalize(value).replace(/[._-]/g, ' ');
   const aliases: Record<string, AbilityKey> = {
@@ -147,94 +169,91 @@ const formatModifier = (score: number) => {
 
 const getHitDie = (hitDice: string) => Number(hitDice.match(/d(\d+)/i)?.[1] ?? 0);
 
-const getSpellCost = (spell: Spell) => (
-  spell.level === 'Заговор' ? 'без ячейки' : `${spell.level}-я ячейка`
-);
+const SpellList = ({
+  title,
+  spells,
+  maximumAvailableSpellLevel,
+  availableSlots,
+}: {
+  title: string;
+  spells: Spell[];
+  maximumAvailableSpellLevel?: number;
+  availableSlots?: number[];
+}) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [damageFilter, setDamageFilter] = useState<string | null>(null);
+  const shouldShowFilters = spells.length > 6;
+  const damageTypes = [...new Set(spells.map((spell) => spell.damage_type).filter((type): type is string => Boolean(type)))];
+  const filteredSpells = spells.filter((spell) => (
+    (!searchQuery || normalize(spell.name).includes(normalize(searchQuery)))
+    && (!damageFilter || spell.damage_type === damageFilter)
+  ));
 
-const SpellList = ({ title, spells }: { title: string; spells: Spell[] }) => (
+  return (
   <Box sx={{ mb: 2 }}>
     <Typography variant="subtitle2" sx={{ mb: 0.75 }}>
       {title}
     </Typography>
+    {shouldShowFilters && (
+      <Box sx={{ mb: 1.5 }}>
+        <TextField
+          size="small"
+          fullWidth
+          label={`Поиск: ${title.toLowerCase()}`}
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+        />
+        {damageTypes.length > 0 && (
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
+            <Chip label="Все" size="small" color={damageFilter === null ? 'primary' : 'default'} onClick={() => setDamageFilter(null)} />
+            {damageTypes.map((damageType) => (
+              <Chip
+                key={damageType}
+                label={damageType}
+                size="small"
+                color={damageFilter === damageType ? 'primary' : 'default'}
+                variant={damageFilter === damageType ? 'filled' : 'outlined'}
+                onClick={() => setDamageFilter((current) => current === damageType ? null : damageType)}
+                icon={damageIcons[damageType] ? <Box component="img" src={damageIcons[damageType]} alt="" /> : undefined}
+              />
+            ))}
+          </Box>
+        )}
+      </Box>
+    )}
     {spells.length > 0 ? (
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 1 }}>
-        {spells.map((spell) => (
-          <Tooltip
-            key={spell._id}
-            arrow
-            enterTouchDelay={0}
-            placement="right-start"
-            slotProps={{
-              tooltip: {
-                sx: {
-                  maxWidth: 300,
-                  height: 240,
-                  p: 1,
-                  overflowY: 'auto',
-                  boxSizing: 'border-box',
-                  backgroundColor: 'grey.900',
-                  backdropFilter: 'blur(4px)',
-                  border: '1px solid',
-                  borderColor: 'primary.main',
-                },
-              },
-              arrow: { sx: { color: 'grey.900' } },
-            }}
-            title={
-              <Box sx={{ p: 0.5, maxWidth: 280 }}>
-                <Typography variant="subtitle2" sx={{ color: 'common.white', fontWeight: 'bold', mb: 0.5 }}>
-                  {spell.name}
-                </Typography>
-                <Typography variant="caption" sx={{ color: 'grey.300', display: 'block', whiteSpace: 'pre-line' }}>
-                  {spell.description || 'Описание отсутствует.'}
-                </Typography>
-                {spell.higher_levels && (
-                  <Typography variant="caption" sx={{ color: 'grey.300', display: 'block', mt: 1, whiteSpace: 'pre-line' }}>
-                    На больших уровнях: {spell.higher_levels}
-                  </Typography>
-                )}
-              </Box>
-            }
-          >
-            <Paper
-              component="article"
-              variant="outlined"
-              tabIndex={0}
-              aria-label={`${spell.name}. Стоимость: ${getSpellCost(spell)}.`}
-              sx={{
-                minWidth: 0,
-                p: 1,
-                cursor: 'help',
-                transition: 'background-color 150ms ease, border-color 150ms ease',
-                '&:hover, &:focus-visible': {
-                  borderColor: 'primary.main',
-                  backgroundColor: 'action.hover',
-                },
-              }}
-            >
-              <Typography variant="subtitle2" noWrap title={spell.name}>
-                {spell.name}
-              </Typography>
-              <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 0.5, mb: 0 }}>
-                Стоимость: {getSpellCost(spell)}
-              </Typography>
-              <Typography variant="caption" color="text.secondary" component="p" sx={{ m: 0 }}>
-                Урон: {spell.damage_dice || '—'}
-              </Typography>
-              <Typography variant="caption" color="text.secondary" component="p" sx={{ m: 0 }}>
-                Тип урона: {spell.damage_type || '—'}
-              </Typography>
-            </Paper>
-          </Tooltip>
-        ))}
+        {filteredSpells.map((spell) => {
+          const spellLevel = Number(spell.level);
+          const unavailable = Number.isFinite(spellLevel) && spellLevel > 0 && (
+            availableSlots
+              ? (availableSlots[spellLevel - 1] ?? 0) === 0
+              : maximumAvailableSpellLevel !== undefined && spellLevel > maximumAvailableSpellLevel
+          );
+
+          return (
+            <SpellCard
+              key={spell._id}
+              spell={spell}
+              selected={false}
+              onToggle={() => undefined}
+              readOnly
+              disabled={unavailable}
+            />
+          );
+        })}
       </Box>
     ) : (
       <Typography variant="body2" color="text.secondary">
         Не выбрано.
       </Typography>
     )}
+    {shouldShowFilters && spells.length > 0 && filteredSpells.length === 0 && (
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>Ничего не найдено.</Typography>
+    )}
   </Box>
-);
+  );
+};
 
 const calculateArmorClass = (armors: Armor[], dexterityModifier: number) => {
   const shield = armors.find((armor) => normalize(armor.name).includes('щит'));
@@ -427,8 +446,18 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
   const [pendingSubclassId, setPendingSubclassId] = useState('');
   const [pendingCantrips, setPendingCantrips] = useState<Spell[]>([]);
   const [pendingSpells, setPendingSpells] = useState<Spell[]>([]);
+  const [pendingSpecialSpells, setPendingSpecialSpells] = useState<Spell[]>([]);
+  const [remainingSpellSlots, setRemainingSpellSlots] = useState<number[] | undefined>();
+  const [slotResetVersion, setSlotResetVersion] = useState(0);
+  const [cantripSearchQuery, setCantripSearchQuery] = useState('');
+  const [spellSearchQuery, setSpellSearchQuery] = useState('');
+  const [cantripDamageFilter, setCantripDamageFilter] = useState<string | null>(null);
+  const [spellDamageFilter, setSpellDamageFilter] = useState<string | null>(null);
+  const [cantripDamageDiceFilter, setCantripDamageDiceFilter] = useState<string | null>(null);
+  const [spellDamageDiceFilter, setSpellDamageDiceFilter] = useState<string | null>(null);
   const [availableCantrips, setAvailableCantrips] = useState<Spell[]>([]);
   const [availableSpells, setAvailableSpells] = useState<Spell[]>([]);
+  const [availableSpecialSpells, setAvailableSpecialSpells] = useState<Spell[]>([]);
   const [levelSpellsLoading, setLevelSpellsLoading] = useState(false);
   const [levelSpellsError, setLevelSpellsError] = useState<string | null>(null);
   const [appliedLevelChanges, setAppliedLevelChanges] = useState<AppliedLevelChange[]>([]);
@@ -478,6 +507,10 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
   const selectedSubclass = characterClass.subclasses.find(
     (subclass) => subclass.id === classConfiguration.subclass,
   );
+  const pendingSubclass = characterClass.subclasses.find(
+    (subclass) => subclass.id === pendingSubclassId,
+  );
+  const effectiveSpellcasting = (pendingSubclass ?? selectedSubclass)?.spellcasting ?? characterClass.spellcasting;
   const equipmentNames = [
     ...characterClass.fixed_equipment.map((item) => item.name),
     ...classConfiguration.equipment.flat(),
@@ -683,13 +716,22 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
     if (firstSelected !== secondSelected) return firstSelected ? -1 : 1;
     return first.name.localeCompare(second.name, 'ru-RU');
   });
-  const currentLevelSlots = characterClass.spellcasting?.spell_slots_progression?.find(
+  const currentLevelSlots = effectiveSpellcasting?.spell_slots_progression?.find(
     ({ level }) => level === characterLevel,
   )?.slots;
+  const maximumAvailableSpellLevel = (currentLevelSlots ?? []).reduce(
+    (maximumLevel, slots, index) => (slots > 0 ? index + 1 : maximumLevel),
+    0,
+  );
   const classBackgroundImage = getClassBackgroundImage(characterClass.name);
   const unlockedSubclassSpells = selectedSubclass?.class_spells?.filter(
     ({ level_requirement }) => level_requirement <= characterLevel,
   ) ?? [];
+  const nextLevelSpellGrants: SpellGrant[] = pendingLevel === null
+    ? []
+    : (pendingSubclass ?? selectedSubclass)?.spell_grants?.filter(
+      (grant) => grant.level_requirement === pendingLevel && grant.mode === 'automatic',
+    ) ?? [];
   const nextLevelInfo = pendingLevel === null
     ? undefined
     : characterClass.levels.find(({ level }) => level === pendingLevel);
@@ -710,27 +752,88 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
   const requiresAbilityScoreIncrease = nextLevelInfo?.features.some((feature) => (
     normalize(feature).includes('увеличение характеристик')
   )) ?? false;
+  const nextCantripCount = nextLevelInfo?.cantrips_known
+    ?? effectiveSpellcasting?.cantrips_known_progression?.[Math.max(0, (pendingLevel ?? characterLevel) - 1)];
+  const nextSpellCount = nextLevelInfo?.spells_known
+    ?? effectiveSpellcasting?.spells_known_progression?.[Math.max(0, (pendingLevel ?? characterLevel) - 1)];
+  const currentCantripCount = currentLevelInfo?.cantrips_known
+    ?? effectiveSpellcasting?.cantrips_known_progression?.[Math.max(0, characterLevel - 1)]
+    ?? 0;
+  const specialSpellChoicesKey = JSON.stringify(effectiveSpellcasting?.special_spell_choices ?? []);
+  const nextSpecialSpellChoices = useMemo(
+    () => (JSON.parse(specialSpellChoicesKey) as SpecialSpellChoice[]).filter((choice) => choice.level === pendingLevel),
+    [pendingLevel, specialSpellChoicesKey],
+  );
+  const specialSpellsToChoose = nextSpecialSpellChoices.reduce((total, choice) => total + choice.count, 0);
+  const currentSpellCount = currentLevelInfo?.spells_known
+    ?? effectiveSpellcasting?.spells_known_progression?.[Math.max(0, characterLevel - 1)]
+    ?? 0;
   const cantripsToChooseAtNextLevel = Math.max(
     0,
-    (nextLevelInfo?.cantrips_known ?? classConfiguration.cantrips.length) - classConfiguration.cantrips.length,
+    (nextCantripCount ?? currentCantripCount) - currentCantripCount,
   );
   const spellsToChooseAtNextLevel = Math.max(
     0,
-    (nextLevelInfo?.spells_known ?? classConfiguration.spells1.length) - classConfiguration.spells1.length,
+    (nextSpellCount ?? currentSpellCount) - currentSpellCount - specialSpellsToChoose,
   );
-  const maxSpellLevelAtNextLevel = (nextLevelInfo?.slots ?? []).reduce(
+  const nextLevelSlots = nextLevelInfo?.slots
+    ?? effectiveSpellcasting?.spell_slots_progression?.find(({ level }) => level === pendingLevel)?.slots
+    ?? [];
+  const maxSpellLevelAtNextLevel = nextLevelSlots.reduce(
     (maximumLevel, slots, index) => (slots > 0 ? index + 1 : maximumLevel),
     0,
   );
   const requiresCantripSelection = cantripsToChooseAtNextLevel > 0;
   const requiresSpellSelection = spellsToChooseAtNextLevel > 0;
+  const requiresSpecialSpellSelection = specialSpellsToChoose > 0;
   const requiresAdvancementChoice = requiresAbilityScoreIncrease;
+  const filteredAvailableCantrips = useMemo(
+    () => filterLevelSpells(availableCantrips, cantripSearchQuery, cantripDamageFilter, cantripDamageDiceFilter),
+    [availableCantrips, cantripDamageDiceFilter, cantripDamageFilter, cantripSearchQuery],
+  );
+  const filteredAvailableSpells = useMemo(
+    () => filterLevelSpells(availableSpells, spellSearchQuery, spellDamageFilter, spellDamageDiceFilter),
+    [availableSpells, spellDamageDiceFilter, spellDamageFilter, spellSearchQuery],
+  );
+  const filteredAvailableSpecialSpells = useMemo(
+    () => filterLevelSpells(availableSpecialSpells, spellSearchQuery, spellDamageFilter, spellDamageDiceFilter),
+    [availableSpecialSpells, spellDamageDiceFilter, spellDamageFilter, spellSearchQuery],
+  );
 
   useEffect(() => {
-    if (pendingLevel === null || (!requiresCantripSelection && !requiresSpellSelection)) return undefined;
+    const grants = (selectedSubclass?.spell_grants ?? []).filter(
+      (grant) => grant.mode === 'automatic' && grant.level_requirement <= characterLevel,
+    );
+    const spellNames = grants.flatMap((grant) => grant.spells);
+    if (!onClassConfigurationChange || spellNames.length === 0) return undefined;
 
     let cancelled = false;
-    const className = characterClass.name.toLocaleLowerCase('ru-RU');
+    const addGrantedSpells = async () => {
+      const matches = await Promise.all(spellNames.map((name) => searchSpells({ name })));
+      if (cancelled) return;
+      const additions = matches.map((spells, index) => (
+        spells.find((spell) => normalize(spell.name) === normalize(spellNames[index]))
+      )).filter((spell): spell is Spell => Boolean(spell)).filter((spell) => (
+        !classConfiguration.spells1.some((selectedSpell) => selectedSpell._id === spell._id)
+      ));
+
+      if (additions.length > 0) {
+        onClassConfigurationChange({
+          ...classConfiguration,
+          spells1: [...classConfiguration.spells1, ...additions],
+        });
+      }
+    };
+
+    void addGrantedSpells();
+    return () => { cancelled = true; };
+  }, [characterLevel, classConfiguration, onClassConfigurationChange, selectedSubclass]);
+
+  useEffect(() => {
+    if (pendingLevel === null || (!requiresCantripSelection && !requiresSpellSelection && !requiresSpecialSpellSelection)) return undefined;
+
+    let cancelled = false;
+    const className = (effectiveSpellcasting?.advancement?.spell_list_class ?? characterClass.name).toLocaleLowerCase('ru-RU');
 
     const loadLevelSpells = async () => {
       setLevelSpellsLoading(true);
@@ -748,13 +851,23 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
             ),
           )
           : Promise.resolve([]);
-        const [cantrips, spellLevels] = await Promise.all([cantripPromise, spellsPromise]);
+        const specialSpellsPromise = requiresSpecialSpellSelection
+          ? Promise.all(nextSpecialSpellChoices.flatMap((choice) => (
+            choice.any_class
+              ? [searchSpells({ level: String(choice.spell_level), category: '^spells$' })]
+              : [fetchSpellsByClassAndLevel(choice.spell_list_class ?? className, choice.spell_level)]
+          )))
+          : Promise.resolve([]);
+        const [cantrips, spellLevels, specialSpellLevels] = await Promise.all([cantripPromise, spellsPromise, specialSpellsPromise]);
 
         if (cancelled) return;
         setAvailableCantrips(cantrips.filter((spell) => (
           !classConfiguration.cantrips.some((selectedSpell) => selectedSpell._id === spell._id)
         )));
         setAvailableSpells(spellLevels.flat().filter((spell) => (
+          !classConfiguration.spells1.some((selectedSpell) => selectedSpell._id === spell._id)
+        )));
+        setAvailableSpecialSpells(specialSpellLevels.flat().filter((spell) => (
           !classConfiguration.spells1.some((selectedSpell) => selectedSpell._id === spell._id)
         )));
       } catch {
@@ -770,12 +883,15 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
     };
   }, [
     characterClass.name,
+    effectiveSpellcasting,
     classConfiguration.cantrips,
     classConfiguration.spells1,
     maxSpellLevelAtNextLevel,
     pendingLevel,
     requiresCantripSelection,
     requiresSpellSelection,
+    requiresSpecialSpellSelection,
+    nextSpecialSpellChoices,
   ]);
 
   const resetPendingLevelChoices = () => {
@@ -786,6 +902,13 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
     setPendingSubclassId('');
     setPendingCantrips([]);
     setPendingSpells([]);
+    setPendingSpecialSpells([]);
+    setCantripSearchQuery('');
+    setSpellSearchQuery('');
+    setCantripDamageFilter(null);
+    setSpellDamageFilter(null);
+    setCantripDamageDiceFilter(null);
+    setSpellDamageDiceFilter(null);
     setLevelSpellsError(null);
   };
 
@@ -840,6 +963,7 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
     if (requiresSubclassSelection && !pendingSubclassId) return;
     if (requiresCantripSelection && pendingCantrips.length !== cantripsToChooseAtNextLevel) return;
     if (requiresSpellSelection && pendingSpells.length !== spellsToChooseAtNextLevel) return;
+    if (requiresSpecialSpellSelection && pendingSpecialSpells.length !== specialSpellsToChoose) return;
 
     if (advancementChoice === 'ability' && abilityScoreIncrease && onAbilityScoresChange) {
       onAbilityScoresChange({
@@ -869,30 +993,44 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
       }
     }
 
-    if (onClassConfigurationChange) {
+    const applyLevelUp = async () => {
+      const grantedSpellNames = nextLevelSpellGrants.flatMap((grant) => grant.spells);
+      const grantedSpells = grantedSpellNames.length > 0
+        ? (await Promise.all(grantedSpellNames.map((name) => searchSpells({ name })))).map((matches, index) => (
+          matches.find((spell) => normalize(spell.name) === normalize(grantedSpellNames[index]))
+        )).filter((spell): spell is Spell => Boolean(spell))
+        : [];
+
+      if (onClassConfigurationChange) {
       onClassConfigurationChange?.({
         ...classConfiguration,
         subclass: pendingSubclassId || classConfiguration.subclass,
         cantrips: [...classConfiguration.cantrips, ...pendingCantrips],
-        spells1: [...classConfiguration.spells1, ...pendingSpells],
+        spells1: [...classConfiguration.spells1, ...pendingSpells, ...pendingSpecialSpells, ...grantedSpells.filter((spell) => (
+          !classConfiguration.spells1.some((selectedSpell) => selectedSpell._id === spell._id)
+          && !pendingSpells.some((selectedSpell) => selectedSpell._id === spell._id)
+        ))],
       });
-    }
+      }
 
-    setAppliedLevelChanges((changes) => [
+      setAppliedLevelChanges((changes) => [
       ...changes,
       {
         level: pendingLevel,
         abilityScoreIncrease: advancementChoice === 'ability' ? abilityScoreIncrease || undefined : undefined,
         selectedSubclassId: pendingSubclassId || undefined,
         addedCantripIds: pendingCantrips.map((spell) => spell._id),
-        addedSpellIds: pendingSpells.map((spell) => spell._id),
+        addedSpellIds: [...pendingSpells, ...pendingSpecialSpells].map((spell) => spell._id),
         addedFeatId: advancementChoice === 'feat' ? pendingFeatId || undefined : undefined,
         featAbilityBonuses: appliedFeatAbilityBonuses,
       },
-    ]);
-    onCharacterLevelChange?.(pendingLevel);
-    setPendingLevel(null);
-    resetPendingLevelChoices();
+      ]);
+      onCharacterLevelChange?.(pendingLevel);
+      setPendingLevel(null);
+      resetPendingLevelChoices();
+    };
+
+    void applyLevelUp();
   };
 
   const handleSaveCharacter = async () => {
@@ -1030,7 +1168,7 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
   );
 
   const combatTab = (
-    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, minmax(0, 1fr))' }, gap: 2 }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       <SummaryCard title="Оружие и броня">
         {selectedWeapons.length > 0 && (
           <>
@@ -1068,23 +1206,37 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
       </SummaryCard>
 
       <SummaryCard title="Магия">
+        <Box sx={{ display: 'flex', justifyContent: 'flex-start', mb: 1 }}>
+          <Button size="small" variant="outlined" onClick={() => setSlotResetVersion((version) => version + 1)}>
+            Восстановить ячейки
+          </Button>
+        </Box>
         {kiPoints > 0 && (
           <>
             <Typography variant="subtitle2">Ци: {kiPoints}</Typography>
-            <KiPoints points={kiPoints} />
+            <KiPoints key={`ki-${characterLevel}-${kiPoints}-${slotResetVersion}`} points={kiPoints} />
             <Divider sx={{ my: 2 }} />
           </>
         )}
-        {characterClass.spellcasting ? (
+        {effectiveSpellcasting ? (
           <>
             <Typography variant="body2" color="text.secondary">
-              Базовая характеристика: {characterClass.spellcasting.ability}. Фокус: {characterClass.spellcasting.focus || 'не указан'}.
+              Базовая характеристика: {effectiveSpellcasting.ability}. Фокус: {effectiveSpellcasting.focus || 'не указан'}.
             </Typography>
             <Typography variant="subtitle2" sx={{ mt: 2 }}>Ячейки на {characterLevel}-м уровне</Typography>
-            <SpellSlots slots={currentLevelSlots} />
+            <SpellSlots
+              key={`spell-slots-${characterLevel}-${slotResetVersion}`}
+              slots={currentLevelSlots}
+              onAvailabilityChange={setRemainingSpellSlots}
+            />
             <Divider sx={{ my: 2 }} />
             <SpellList title="Заговоры" spells={classConfiguration.cantrips} />
-            <SpellList title="Заклинания" spells={classConfiguration.spells1} />
+            <SpellList
+              title="Заклинания"
+              spells={classConfiguration.spells1}
+              maximumAvailableSpellLevel={maximumAvailableSpellLevel}
+              availableSlots={remainingSpellSlots}
+            />
             {unlockedSubclassSpells.length > 0 && (
               <>
                 <Divider sx={{ my: 2 }} />
@@ -1562,6 +1714,19 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
               </List>
             </Box>
           )}
+          {nextLevelSpellGrants.length > 0 && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle2">Заклинания подкласса</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                Эти заклинания добавятся автоматически и не занимают лимит известных заклинаний.
+              </Typography>
+              <List dense disablePadding sx={{ mt: 0.75 }}>
+                {nextLevelSpellGrants.flatMap((grant) => grant.spells).map((spell) => (
+                  <ListItem key={spell} disableGutters><ListItemText primary={spell} /></ListItem>
+                ))}
+              </List>
+            </Box>
+          )}
           {requiresSubclassSelection && pendingLevel !== null && (
             <Box sx={{ mt: 2 }}>
               <SubclassSelection
@@ -1572,7 +1737,7 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
               />
             </Box>
           )}
-          {(requiresCantripSelection || requiresSpellSelection) && (
+          {(requiresCantripSelection || requiresSpellSelection || requiresSpecialSpellSelection) && (
             <Box sx={{ mt: 2 }}>
               <Typography variant="subtitle2">Выбор новых заклинаний</Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
@@ -1586,78 +1751,80 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
               {levelSpellsError && <Alert severity="error" sx={{ mt: 1.5 }}>{levelSpellsError}</Alert>}
               {requiresCantripSelection && !levelSpellsLoading && !levelSpellsError && (
                 <Box sx={{ mt: 2 }}>
-                  <Typography variant="subtitle2">
-                    Заговоры: {pendingCantrips.length}/{cantripsToChooseAtNextLevel}
-                  </Typography>
-                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 1, mt: 1 }}>
-                    {availableCantrips.map((spell) => {
-                      const selected = pendingCantrips.some((item) => item._id === spell._id);
-                      const disabled = !selected && pendingCantrips.length >= cantripsToChooseAtNextLevel;
-                      return (
-                        <Card
-                          key={spell._id}
-                          variant="outlined"
-                          onClick={() => {
-                            if (disabled) return;
-                            setPendingCantrips((spells) => (
-                              selected
-                                ? spells.filter((item) => item._id !== spell._id)
-                                : [...spells, spell]
-                            ));
-                          }}
-                          sx={{
-                            p: 1.5,
-                            cursor: disabled ? 'not-allowed' : 'pointer',
-                            opacity: disabled ? 0.55 : 1,
-                            borderColor: selected ? 'primary.main' : undefined,
-                          }}
-                        >
-                          <Typography variant="subtitle2">{spell.name}</Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {spell.school} · {spell.damage_dice ?? 'без урона'}
-                          </Typography>
-                        </Card>
-                      );
-                    })}
-                  </Box>
+                  <SpellSelection
+                    title="Заговоры"
+                    spells={filteredAvailableCantrips}
+                    selectedSpells={pendingCantrips}
+                    toChoose={cantripsToChooseAtNextLevel}
+                    loading={false}
+                    className={effectiveSpellcasting?.advancement?.spell_list_class ?? characterClass.name}
+                    isCantrip
+                    searchQuery={cantripSearchQuery}
+                    setSearchQuery={setCantripSearchQuery}
+                    damageFilter={cantripDamageFilter}
+                    setDamageFilter={setCantripDamageFilter}
+                    damageTypes={[...new Set(availableCantrips.map((spell) => spell.damage_type).filter((type): type is string => Boolean(type)))]}
+                    damageDiceFilter={cantripDamageDiceFilter}
+                    setDamageDiceFilter={setCantripDamageDiceFilter}
+                    damageDice={[...new Set(availableCantrips.map((spell) => spell.damage_dice).filter((dice): dice is string => Boolean(dice)))]}
+                    onToggle={(spell) => setPendingCantrips((spells) => (
+                      spells.some((item) => item._id === spell._id)
+                        ? spells.filter((item) => item._id !== spell._id)
+                        : spells.length < cantripsToChooseAtNextLevel ? [...spells, spell] : spells
+                    ))}
+                  />
                 </Box>
               )}
               {requiresSpellSelection && !levelSpellsLoading && !levelSpellsError && (
                 <Box sx={{ mt: 2 }}>
-                  <Typography variant="subtitle2">
-                    Заклинания: {pendingSpells.length}/{spellsToChooseAtNextLevel}
-                  </Typography>
-                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 1, mt: 1 }}>
-                    {availableSpells.map((spell) => {
-                      const selected = pendingSpells.some((item) => item._id === spell._id);
-                      const disabled = !selected && pendingSpells.length >= spellsToChooseAtNextLevel;
-                      return (
-                        <Card
-                          key={spell._id}
-                          variant="outlined"
-                          onClick={() => {
-                            if (disabled) return;
-                            setPendingSpells((spells) => (
-                              selected
-                                ? spells.filter((item) => item._id !== spell._id)
-                                : [...spells, spell]
-                            ));
-                          }}
-                          sx={{
-                            p: 1.5,
-                            cursor: disabled ? 'not-allowed' : 'pointer',
-                            opacity: disabled ? 0.55 : 1,
-                            borderColor: selected ? 'primary.main' : undefined,
-                          }}
-                        >
-                          <Typography variant="subtitle2">{spell.name}</Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {spell.level}-й уровень · {spell.school} · {spell.damage_dice ?? 'без урона'}
-                          </Typography>
-                        </Card>
-                      );
-                    })}
-                  </Box>
+                  <SpellSelection
+                    title="Заклинания"
+                    spells={filteredAvailableSpells}
+                    selectedSpells={pendingSpells}
+                    toChoose={spellsToChooseAtNextLevel}
+                    loading={false}
+                    className={effectiveSpellcasting?.advancement?.spell_list_class ?? characterClass.name}
+                    isCantrip={false}
+                    searchQuery={spellSearchQuery}
+                    setSearchQuery={setSpellSearchQuery}
+                    damageFilter={spellDamageFilter}
+                    setDamageFilter={setSpellDamageFilter}
+                    damageTypes={[...new Set(availableSpells.map((spell) => spell.damage_type).filter((type): type is string => Boolean(type)))]}
+                    damageDiceFilter={spellDamageDiceFilter}
+                    setDamageDiceFilter={setSpellDamageDiceFilter}
+                    damageDice={[...new Set(availableSpells.map((spell) => spell.damage_dice).filter((dice): dice is string => Boolean(dice)))]}
+                    onToggle={(spell) => setPendingSpells((spells) => (
+                      spells.some((item) => item._id === spell._id)
+                        ? spells.filter((item) => item._id !== spell._id)
+                        : spells.length < spellsToChooseAtNextLevel ? [...spells, spell] : spells
+                    ))}
+                  />
+                </Box>
+              )}
+              {requiresSpecialSpellSelection && !levelSpellsLoading && !levelSpellsError && (
+                <Box sx={{ mt: 2 }}>
+                  <SpellSelection
+                    title={nextSpecialSpellChoices.map((choice) => choice.title).join(', ')}
+                    spells={filteredAvailableSpecialSpells}
+                    selectedSpells={pendingSpecialSpells}
+                    toChoose={specialSpellsToChoose}
+                    loading={false}
+                    className={characterClass.name}
+                    isCantrip={false}
+                    searchQuery={spellSearchQuery}
+                    setSearchQuery={setSpellSearchQuery}
+                    damageFilter={spellDamageFilter}
+                    setDamageFilter={setSpellDamageFilter}
+                    damageTypes={[...new Set(availableSpecialSpells.map((spell) => spell.damage_type).filter((type): type is string => Boolean(type)))]}
+                    damageDiceFilter={spellDamageDiceFilter}
+                    setDamageDiceFilter={setSpellDamageDiceFilter}
+                    damageDice={[...new Set(availableSpecialSpells.map((spell) => spell.damage_dice).filter((dice): dice is string => Boolean(dice)))]}
+                    onToggle={(spell) => setPendingSpecialSpells((spells) => (
+                      spells.some((item) => item._id === spell._id)
+                        ? spells.filter((item) => item._id !== spell._id)
+                        : spells.length < specialSpellsToChoose ? [...spells, spell] : spells
+                    ))}
+                  />
                 </Box>
               )}
             </Box>
@@ -1852,6 +2019,7 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
               || (requiresSubclassSelection && !pendingSubclassId)
               || (requiresCantripSelection && pendingCantrips.length !== cantripsToChooseAtNextLevel)
               || (requiresSpellSelection && pendingSpells.length !== spellsToChooseAtNextLevel)
+              || (requiresSpecialSpellSelection && pendingSpecialSpells.length !== specialSpellsToChoose)
               || levelSpellsLoading
               || Boolean(levelSpellsError)
             }

@@ -12,31 +12,35 @@ import RadiantIcon from '../../../../../assets/Radiant_Damage_Icon.webp';
 import SlashingIcon from '../../../../../assets/Slashing_Damage_Icon.webp';
 import ThunderIcon from '../../../../../assets/Thunder_Damage_Icon.webp';
 
-export const damageIcons: Record<string, string> = {
-  'Режущий': SlashingIcon,
-  'Колющий': PiercingIcon,
-  'Дробящий': BludgeoningIcon,
-  'Огонь': FireIcon,
-  'Огнём': FireIcon,
-  'Холод': ColdIcon,
-  'Холодом': ColdIcon,
-  'Молния': LightningIcon,
-  'Электричеством': LightningIcon,
-  'Кислота': AcidIcon,
-  'Кислотой': AcidIcon,
-  'Звук': ThunderIcon,
-  'Звуком': ThunderIcon,
-  'Силовой': ForceIcon,
-  'Силовым': ForceIcon,
-  'Лучистый': RadiantIcon,
-  'Излучением': RadiantIcon,
-  'Некротический': NecroticIcon,
-  'Некротической': NecroticIcon,
-  'Психический': PsychicIcon,
-  'Психической': PsychicIcon,
-  'Яд': PoisonIcon,
-  'Ядом': PoisonIcon,
+export const damageDetails: Record<string, { icon: string; color: string; label: string }> = {
+  'Режущий': { icon: SlashingIcon, color: '#FF4D4D', label: 'Режущий' },
+  'Колющий': { icon: PiercingIcon, color: '#B37400', label: 'Колющий' },
+  'Дробящий': { icon: BludgeoningIcon, color: '#8C8C8C', label: 'Дробящий' },
+  'Огонь': { icon: FireIcon, color: '#FB9800', label: 'Огонь' },
+  'Огнём': { icon: FireIcon, color: '#FB9800', label: 'Огонь' },
+  'Холод': { icon: ColdIcon, color: '#8CCEE4', label: 'Холод' },
+  'Холодом': { icon: ColdIcon, color: '#8CCEE4', label: 'Холод' },
+  'Молния': { icon: LightningIcon, color: '#7EADEB', label: 'Молния' },
+  'Электричеством': { icon: LightningIcon, color: '#7EADEB', label: 'Молния' },
+  'Кислота': { icon: AcidIcon, color: '#EBF61A', label: 'Кислота' },
+  'Кислотой': { icon: AcidIcon, color: '#EBF61A', label: 'Кислота' },
+  'Звук': { icon: ThunderIcon, color: '#C198FA', label: 'Звук' },
+  'Звуком': { icon: ThunderIcon, color: '#C198FA', label: 'Звук' },
+  'Силовой': { icon: ForceIcon, color: '#DF7E7D', label: 'Силовой' },
+  'Силовым': { icon: ForceIcon, color: '#DF7E7D', label: 'Силовой' },
+  'Лучистый': { icon: RadiantIcon, color: '#FCDC87', label: 'Лучистый' },
+  'Излучением': { icon: RadiantIcon, color: '#FCDC87', label: 'Лучистый' },
+  'Некротический': { icon: NecroticIcon, color: '#B9ECD0', label: 'Некротический' },
+  'Некротической': { icon: NecroticIcon, color: '#B9ECD0', label: 'Некротический' },
+  'Психический': { icon: PsychicIcon, color: '#E395CF', label: 'Психический' },
+  'Психической': { icon: PsychicIcon, color: '#E395CF', label: 'Психический' },
+  'Яд': { icon: PoisonIcon, color: '#E0F296', label: 'Яд' },
+  'Ядом': { icon: PoisonIcon, color: '#E0F296', label: 'Яд' },
 };
+
+export const damageIcons: Record<string, string> = Object.fromEntries(
+  Object.entries(damageDetails).map(([damageType, { icon }]) => [damageType, icon]),
+);
 
 export const recommendedSpells: Record<string, { cantrips: string[]; spells1: string[] }> = {
   'Бард': {

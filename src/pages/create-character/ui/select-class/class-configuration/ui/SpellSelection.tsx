@@ -18,8 +18,8 @@ interface SpellSelectionProps {
   damageDiceFilter: string | null;
   setDamageDiceFilter: (dice: string | null) => void;
   damageDice: string[];
-  applyRecommended: () => void;
-  clear: () => void;
+  applyRecommended?: () => void;
+  clear?: () => void;
   loading: boolean;
   className: string;
   isCantrip: boolean;
@@ -57,14 +57,10 @@ export const SpellSelection: React.FC<SpellSelectionProps> = ({
           </span>
         </Typography>
         <Box sx={{ display: 'flex', gap: 1 }}>
-          {!loading && spells && spells.length > 0 && (
+          {!loading && spells && spells.length > 0 && (applyRecommended || clear) && (
             <>
-              <Button size="small" variant="outlined" onClick={applyRecommended} disabled={selectedSpells.length === toChoose} sx={{ color: 'white', borderColor: 'rgba(255,255,255,0.3)' }}>
-                Рекомендованные
-              </Button>
-              <Button size="small" variant="outlined" onClick={clear} disabled={selectedSpells.length === 0} sx={{ color: 'white', borderColor: 'rgba(255,255,255,0.3)' }}>
-                Очистить
-              </Button>
+              {applyRecommended && <Button size="small" variant="outlined" onClick={applyRecommended} disabled={selectedSpells.length === toChoose} sx={{ color: 'white', borderColor: 'rgba(255,255,255,0.3)' }}>Рекомендованные</Button>}
+              {clear && <Button size="small" variant="outlined" onClick={clear} disabled={selectedSpells.length === 0} sx={{ color: 'white', borderColor: 'rgba(255,255,255,0.3)' }}>Очистить</Button>}
             </>
           )}
         </Box>
