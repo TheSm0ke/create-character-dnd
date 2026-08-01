@@ -166,6 +166,16 @@ const CreateCharacter = () => {
     selectedSkills,
   ]);
 
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      document.documentElement.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      document.body.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [activeStep]);
+
   const {
     data: races,
     loading: racesLoading,
