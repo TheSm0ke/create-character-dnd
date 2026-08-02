@@ -11,14 +11,15 @@ import '@fontsource/cinzel/600.css';
 import '@fontsource/cinzel/700.css';
 import { router } from './routes';
 import { RouterProvider } from 'react-router-dom';
-import { ThemeProvider } from '@emotion/react';
+import { CssBaseline, ThemeProvider } from '@mui/material';
 import theme from './theme';
 
 const root = document.getElementById('root')!;
 createRoot(root).render(
   <StrictMode>
     <ThemeProvider theme={theme}>
-    <RouterProvider router={router} />
+      <CssBaseline />
+      <RouterProvider router={router} />
     </ThemeProvider>
   </StrictMode>
 );
