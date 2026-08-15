@@ -19,6 +19,7 @@ import {
   MenuItem,
   Paper,
   Select,
+  Snackbar,
   Switch,
   Tab,
   Tabs,
@@ -43,6 +44,7 @@ import {
   type Class,
   type CharacterEquipmentItem,
   type CharacterCurrency,
+  type CharacterJournalPage,
   type CreateCharacterPayload,
   type Race,
   type Spell,
@@ -106,9 +108,11 @@ interface CharacterSheetProps {
   customEquipment?: CharacterEquipmentItem[];
   removedEquipment?: CharacterEquipmentItem[];
   currency?: CharacterCurrency;
+  journalPages?: CharacterJournalPage[];
   onCustomEquipmentChange?: (equipment: CharacterEquipmentItem[]) => void;
   onRemovedEquipmentChange?: (equipment: CharacterEquipmentItem[]) => void;
   onCurrencyChange?: (currency: CharacterCurrency) => void;
+  onJournalPagesChange?: (pages: CharacterJournalPage[]) => void;
 }
 
 export interface CharacterSheetHandle {
@@ -430,9 +434,11 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
   customEquipment = [],
   removedEquipment = [],
   currency = { copper: 0, silver: 0, electrum: 0, gold: 0, platinum: 0 },
+  journalPages = [],
   onCustomEquipmentChange,
   onRemovedEquipmentChange,
   onCurrencyChange,
+  onJournalPagesChange,
 }, ref) => {
   const [tab, setTab] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -468,6 +474,7 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
   const [inventorySearchLoading, setInventorySearchLoading] = useState(false);
   const [inventorySearchError, setInventorySearchError] = useState<string | null>(null);
   const [inventoryRemovalCounts, setInventoryRemovalCounts] = useState<Record<string, number>>({});
+  const [journalPageIndex, setJournalPageIndex] = useState(0);
   const { data: skillsData, loading: skillsLoading } = useFetch(fetchSkills);
   const { data: featsData, loading: featsLoading } = useFetch(fetchFeats);
   const { data: weaponsData } = useFetch(fetchWeapons);
@@ -1073,6 +1080,7 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
         cantrip_ids: classConfiguration.cantrips.map((spell) => spell._id),
         spell_ids: classConfiguration.spells1.map((spell) => spell._id),
       },
+      journal_pages: journalPages,
     };
 
     setSaving(true);
@@ -1491,7 +1499,85 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
     </Box>
   );
 
-  const tabPanels = [basicTab, combatTab, socialTab, inventoryTab];
+  const selectedJournalPage = journalPages[journalPageIndex];
+  const canEditJournal = Boolean(characterId && onJournalPagesChange);
+  const addJournalPage = () => {
+    if (!onJournalPagesChange) return;
+
+    const id = typeof crypto?.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `journal-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    onJournalPagesChange([
+      ...journalPages,
+      { id, title: `Страница ${journalPages.length + 1}`, content: '' },
+    ]);
+    setJournalPageIndex(journalPages.length);
+  };
+  const updateJournalPage = (id: string, updates: Partial<CharacterJournalPage>) => {
+    onJournalPagesChange?.(journalPages.map((page) => (page.id === id ? { ...page, ...updates } : page)));
+  };
+  const removeJournalPage = (id: string) => {
+    const nextPages = journalPages.filter((page) => page.id !== id);
+    onJournalPagesChange?.(nextPages);
+    setJournalPageIndex((index) => Math.max(0, Math.min(index, nextPages.length - 1)));
+  };
+  const journalTab = (
+    <SummaryCard title="Дневник">
+      {!canEditJournal ? (
+        <Alert severity="info">Дневник станет доступен после сохранения персонажа.</Alert>
+      ) : (
+        <>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, alignItems: 'center', mb: 2, flexWrap: 'wrap' }}>
+            <Typography variant="body2" color="text.secondary">Храните заметки кампании, цели и важные события.</Typography>
+            <Button variant="outlined" size="small" onClick={addJournalPage}>Добавить страницу</Button>
+          </Box>
+          {journalPages.length === 0 ? (
+            <Typography color="text.secondary">В дневнике пока нет страниц.</Typography>
+          ) : (
+            <>
+              <Tabs
+                value={Math.min(journalPageIndex, journalPages.length - 1)}
+                onChange={(_, value) => setJournalPageIndex(value)}
+                variant="scrollable"
+                allowScrollButtonsMobile
+                sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}
+              >
+                {journalPages.map((page, index) => <Tab key={page.id} label={page.title || `Страница ${index + 1}`} />)}
+              </Tabs>
+              {selectedJournalPage && (
+                <Box sx={{ display: 'grid', gap: 2 }}>
+                  <TextField
+                    label="Название страницы"
+                    value={selectedJournalPage.title}
+                    onChange={(event) => updateJournalPage(selectedJournalPage.id, { title: event.target.value })}
+                    fullWidth
+                  />
+                  <TextField
+                    label="Заметки"
+                    value={selectedJournalPage.content}
+                    onChange={(event) => updateJournalPage(selectedJournalPage.id, { content: event.target.value })}
+                    multiline
+                    minRows={12}
+                    fullWidth
+                    slotProps={{ htmlInput: { maxLength: 20000 } }}
+                    helperText={`${selectedJournalPage.content.length} / 20000`}
+                  />
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap' }}>
+                    <Button color="error" onClick={() => removeJournalPage(selectedJournalPage.id)}>Удалить страницу</Button>
+                    <Button variant="contained" onClick={() => void handleSaveCharacter()} disabled={saving}>
+                      Сохранить дневник
+                    </Button>
+                  </Box>
+                </Box>
+              )}
+            </>
+          )}
+        </>
+      )}
+    </SummaryCard>
+  );
+
+  const tabPanels = [basicTab, combatTab, socialTab, inventoryTab, journalTab];
 
   return (
     <Box sx={{ width: '100%', maxWidth: 1280, mx: 'auto' }}>
@@ -1627,12 +1713,6 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
             Укажите имя, чтобы создать персонажа.
           </Typography>
         )}
-        {saveError && <Alert severity="error" sx={{ mt: 2 }}>{saveError}</Alert>}
-        {savedCharacterId && (
-          <Alert severity="success" sx={{ mt: 2 }}>
-            {characterId ? 'Изменения сохранены.' : 'Персонаж создан.'} Идентификатор: {savedCharacterId}
-          </Alert>
-        )}
       </Paper>
       <Paper variant="outlined" sx={{ mb: 2 }}>
         <Tabs value={tab} onChange={(_, value) => setTab(value)} variant="scrollable" allowScrollButtonsMobile>
@@ -1640,6 +1720,7 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
           <Tab label="Бой и магия" />
           <Tab label="Навыки и характер" />
           <Tab label="Инвентарь" />
+          <Tab label="Дневник" />
         </Tabs>
       </Paper>
       <Box role="tabpanel">{tabPanels[tab]}</Box>
@@ -2096,6 +2177,26 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
           <Button onClick={() => setIsInventoryDialogOpen(false)}>Готово</Button>
         </DialogActions>
       </Dialog>
+      <Snackbar
+        open={Boolean(saveError || savedCharacterId)}
+        autoHideDuration={5000}
+        onClose={() => {
+          setSaveError(null);
+          setSavedCharacterId(null);
+        }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert
+          severity={saveError ? 'error' : 'success'}
+          variant="filled"
+          onClose={() => {
+            setSaveError(null);
+            setSavedCharacterId(null);
+          }}
+        >
+          {saveError ?? `${characterId ? 'Изменения сохранены.' : 'Персонаж создан.'} Идентификатор: ${savedCharacterId}`}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 });

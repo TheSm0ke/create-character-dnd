@@ -13,6 +13,7 @@ import {
   type Character,
   type CharacterCurrency,
   type CharacterEquipmentItem,
+  type CharacterJournalPage,
   type Class,
   type Race,
   type Spell,
@@ -64,6 +65,7 @@ const CharacterSheetEditor = ({
       platinum: 0,
     },
   );
+  const [journalPages, setJournalPages] = useState<CharacterJournalPage[]>(character.journal_pages ?? []);
 
   const [classConfiguration, setClassConfiguration] = useState<ClassConfiguration>({
     skills: character.skills.selected,
@@ -115,9 +117,11 @@ const CharacterSheetEditor = ({
         customEquipment={customEquipment}
         removedEquipment={removedEquipment}
         currency={currency}
+        journalPages={journalPages}
         onCustomEquipmentChange={setCustomEquipment}
         onRemovedEquipmentChange={setRemovedEquipment}
         onCurrencyChange={setCurrency}
+        onJournalPagesChange={setJournalPages}
       />
     </Box>
   );

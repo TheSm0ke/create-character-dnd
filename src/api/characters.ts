@@ -6,6 +6,12 @@ export interface CharacterEquipmentItem {
   count: number;
 }
 
+export interface CharacterJournalPage {
+  id: string;
+  title: string;
+  content: string;
+}
+
 export interface CharacterCurrency {
   copper: number;
   silver: number;
@@ -56,6 +62,7 @@ export interface CreateCharacterPayload {
     cantrip_ids: string[];
     spell_ids: string[];
   };
+  journal_pages?: CharacterJournalPage[];
 }
 
 export interface Character extends CreateCharacterPayload {
