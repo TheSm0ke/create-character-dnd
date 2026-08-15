@@ -3,7 +3,6 @@ import {
   Box,
   Card,
   CardContent,
-  Chip,
   Divider,
   Dialog,
   DialogActions,
@@ -19,7 +18,6 @@ import {
   MenuItem,
   Paper,
   Select,
-  Snackbar,
   Switch,
   Tab,
   Tabs,
@@ -27,7 +25,7 @@ import {
   Typography,
   Button,
 } from '@mui/material';
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from 'react';
 import {
   fetchArmors,
   fetchFeats,
@@ -39,17 +37,15 @@ import {
   updateCharacter,
   searchEquipment,
   type Alignment,
-  type Armor,
   type Background,
   type Class,
   type CharacterEquipmentItem,
   type CharacterCurrency,
-  type CharacterJournalPage,
   type CreateCharacterPayload,
   type Race,
   type Spell,
   type SpellGrant,
-  type Weapon,
+  type CharacterJournalPage,
 } from '../../../../api';
 import { useFetch } from '../../../../api/useFetch';
 import type { AbilityKey } from '../../../../api/classes';
@@ -58,10 +54,19 @@ import type { ClassConfiguration } from '../select-class/classSelection';
 import { getClassBackgroundImage } from '../../../../assets/class-icons';
 import { SubclassSelection } from '../select-class/class-configuration/ui/SubclassSelection';
 import { SpellSelection } from '../select-class/class-configuration/ui/SpellSelection';
-import { SpellCard } from '../select-class/spellCard';
-import { damageIcons } from '../select-class/class-configuration/constants';
 import { getSubclassUnlockLevel } from '../select-class/class-configuration/subclassUtils';
-import { FeatureList, KiPoints, SpellSlots, SummaryCard } from './SheetPrimitives';
+import { JournalTab } from './JournalTab';
+import { BasicTab, CombatTab, InventoryTab, SocialTab } from './CharacterSheetTabs';
+import { InventorySearchDialog } from './InventorySearchDialog';
+import { SaveNotification } from './SaveNotification';
+import {
+  calculateArmorClass,
+  getInventoryEntryFromSearchItem,
+  getWeightInPounds,
+  mergeInventoryEntries,
+  type InventoryEntry,
+  type SearchInventoryItem,
+} from './inventoryUtils';
 
 interface Personality {
   traits: string[];
@@ -69,121 +74,6 @@ interface Personality {
   bonds: string[];
   flaws: string[];
 }
-
-const sanitizeJournalContent = (content: string) => {
-  const template = document.createElement('template');
-  template.innerHTML = content;
-  const allowedTags = new Set(['B', 'STRONG', 'I', 'EM', 'U', 'UL', 'OL', 'LI', 'BR', 'DIV', 'P', 'BLOCKQUOTE']);
-
-  const sanitizeNode = (node: Node) => {
-    [...node.childNodes].forEach(sanitizeNode);
-    if (!(node instanceof HTMLElement)) return;
-
-    if (!allowedTags.has(node.tagName)) {
-      node.replaceWith(...node.childNodes);
-      return;
-    }
-
-    [...node.attributes].forEach((attribute) => node.removeAttribute(attribute.name));
-  };
-
-  sanitizeNode(template.content);
-  return template.innerHTML;
-};
-
-interface JournalEditorProps {
-  pageId: string;
-  value: string;
-  onChange: (value: string) => void;
-}
-
-const JournalEditor = ({ pageId, value, onChange }: JournalEditorProps) => {
-  const editorRef = useRef<HTMLDivElement>(null);
-  const loadedPageIdRef = useRef<string | null>(null);
-  const selectionRangeRef = useRef<Range | null>(null);
-
-  useEffect(() => {
-    if (editorRef.current && loadedPageIdRef.current !== pageId) {
-      editorRef.current.innerHTML = sanitizeJournalContent(value);
-      loadedPageIdRef.current = pageId;
-    }
-  }, [pageId, value]);
-
-  const syncContent = () => {
-    if (editorRef.current) onChange(sanitizeJournalContent(editorRef.current.innerHTML));
-  };
-
-  const rememberSelection = () => {
-    const selection = window.getSelection();
-    if (selection?.rangeCount && editorRef.current?.contains(selection.getRangeAt(0).commonAncestorContainer)) {
-      selectionRangeRef.current = selection.getRangeAt(0).cloneRange();
-    }
-  };
-
-  const applyFormat = (command: string, commandValue?: string) => {
-    const selection = window.getSelection();
-    const savedRange = selectionRangeRef.current;
-    if (selection && savedRange && editorRef.current?.contains(savedRange.commonAncestorContainer)) {
-      selection.removeAllRanges();
-      selection.addRange(savedRange);
-    } else {
-      editorRef.current?.focus();
-    }
-    document.execCommand(command, false, commandValue);
-    rememberSelection();
-    syncContent();
-  };
-
-  return (
-    <Box>
-      <Box role="toolbar" aria-label="Форматирование заметки" sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', mb: 1 }}>
-        <Button size="small" variant="outlined" aria-label="Жирный" onMouseDown={(event) => event.preventDefault()} onClick={() => applyFormat('bold')}><strong>Ж</strong></Button>
-        <Button size="small" variant="outlined" aria-label="Курсив" onMouseDown={(event) => event.preventDefault()} onClick={() => applyFormat('italic')}><em>К</em></Button>
-        <Button size="small" variant="outlined" aria-label="Подчёркнутый" onMouseDown={(event) => event.preventDefault()} onClick={() => applyFormat('underline')}><u>Ч</u></Button>
-        <Button size="small" variant="outlined" onMouseDown={(event) => event.preventDefault()} onClick={() => applyFormat('insertUnorderedList')}>Список</Button>
-        <Button size="small" variant="outlined" onMouseDown={(event) => event.preventDefault()} onClick={() => applyFormat('insertOrderedList')}>Нумерация</Button>
-        <Button size="small" variant="outlined" onMouseDown={(event) => event.preventDefault()} onClick={() => applyFormat('formatBlock', 'blockquote')}>Цитата</Button>
-        <Button size="small" color="inherit" onMouseDown={(event) => event.preventDefault()} onClick={() => applyFormat('removeFormat')}>Очистить</Button>
-      </Box>
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-        Выделите текст в заметке, затем выберите форматирование.
-      </Typography>
-      <Paper
-        ref={editorRef}
-        variant="outlined"
-        contentEditable
-        role="textbox"
-        aria-label="Заметки"
-        aria-multiline="true"
-        suppressContentEditableWarning
-        onInput={() => {
-          rememberSelection();
-          syncContent();
-        }}
-        onKeyUp={rememberSelection}
-        onMouseUp={rememberSelection}
-        onFocus={rememberSelection}
-        onPaste={(event) => {
-          event.preventDefault();
-          document.execCommand('insertText', false, event.clipboardData.getData('text/plain'));
-          syncContent();
-        }}
-        sx={{
-          minHeight: 280,
-          p: 2,
-          textAlign: 'left',
-          whiteSpace: 'pre-wrap',
-          overflowWrap: 'anywhere',
-          cursor: 'text',
-          '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 },
-          '& blockquote': { m: 0, pl: 1.5, borderLeft: 3, borderColor: 'primary.main', color: 'text.secondary' },
-          '& i, & em': { fontStyle: 'italic' },
-          '& ul, & ol': { pl: 3, my: 1 },
-        }}
-      />
-    </Box>
-  );
-};
 
 interface SpecialSpellChoice {
   level: number;
@@ -288,149 +178,6 @@ const formatModifier = (score: number) => {
 
 const getHitDie = (hitDice: string) => Number(hitDice.match(/d(\d+)/i)?.[1] ?? 0);
 
-const SpellList = ({
-  title,
-  spells,
-  maximumAvailableSpellLevel,
-  availableSlots,
-}: {
-  title: string;
-  spells: Spell[];
-  maximumAvailableSpellLevel?: number;
-  availableSlots?: number[];
-}) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [damageFilter, setDamageFilter] = useState<string | null>(null);
-  const shouldShowFilters = spells.length > 6;
-  const damageTypes = [...new Set(spells.map((spell) => spell.damage_type).filter((type): type is string => Boolean(type)))];
-  const filteredSpells = spells.filter((spell) => (
-    (!searchQuery || normalize(spell.name).includes(normalize(searchQuery)))
-    && (!damageFilter || spell.damage_type === damageFilter)
-  ));
-
-  return (
-  <Box sx={{ mb: 2 }}>
-    <Typography variant="subtitle2" sx={{ mb: 0.75 }}>
-      {title}
-    </Typography>
-    {shouldShowFilters && (
-      <Box sx={{ mb: 1.5 }}>
-        <TextField
-          size="small"
-          fullWidth
-          label={`Поиск: ${title.toLowerCase()}`}
-          value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
-        />
-        {damageTypes.length > 0 && (
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
-            <Chip label="Все" size="small" color={damageFilter === null ? 'primary' : 'default'} onClick={() => setDamageFilter(null)} />
-            {damageTypes.map((damageType) => (
-              <Chip
-                key={damageType}
-                label={damageType}
-                size="small"
-                color={damageFilter === damageType ? 'primary' : 'default'}
-                variant={damageFilter === damageType ? 'filled' : 'outlined'}
-                onClick={() => setDamageFilter((current) => current === damageType ? null : damageType)}
-                icon={damageIcons[damageType] ? <Box component="img" src={damageIcons[damageType]} alt="" /> : undefined}
-              />
-            ))}
-          </Box>
-        )}
-      </Box>
-    )}
-    {spells.length > 0 ? (
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 1 }}>
-        {filteredSpells.map((spell) => {
-          const spellLevel = Number(spell.level);
-          const unavailable = Number.isFinite(spellLevel) && spellLevel > 0 && (
-            availableSlots
-              ? (availableSlots[spellLevel - 1] ?? 0) === 0
-              : maximumAvailableSpellLevel !== undefined && spellLevel > maximumAvailableSpellLevel
-          );
-
-          return (
-            <SpellCard
-              key={spell._id}
-              spell={spell}
-              selected={false}
-              onToggle={() => undefined}
-              readOnly
-              disabled={unavailable}
-            />
-          );
-        })}
-      </Box>
-    ) : (
-      <Typography variant="body2" color="text.secondary">
-        Не выбрано.
-      </Typography>
-    )}
-    {shouldShowFilters && spells.length > 0 && filteredSpells.length === 0 && (
-      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>Ничего не найдено.</Typography>
-    )}
-  </Box>
-  );
-};
-
-const calculateArmorClass = (armors: Armor[], dexterityModifier: number) => {
-  const shield = armors.find((armor) => normalize(armor.name).includes('щит'));
-  const wornArmor = armors.find((armor) => !normalize(armor.name).includes('щит'));
-  const shieldBonus = Number(shield?.classArmor.match(/\d+/)?.[0] ?? 0);
-
-  if (!wornArmor) return 10 + dexterityModifier + shieldBonus;
-
-  const baseArmorClass = Number(wornArmor.classArmor.match(/\d+/)?.[0] ?? 10);
-  const armorText = normalize(wornArmor.classArmor);
-  const dexterityCap = Number(armorText.match(/максимум\s*(\d+)/)?.[1] ?? dexterityModifier);
-  const dexterityBonus = armorText.includes('лов')
-    ? Math.min(dexterityModifier, dexterityCap)
-    : 0;
-
-  return baseArmorClass + dexterityBonus + shieldBonus;
-};
-
-const getWeightInPounds = (weight?: string) => {
-  if (!weight) return undefined;
-
-  const normalizedWeight = weight.replace(',', '.');
-  const fraction = normalizedWeight.match(/(\d+)\s*\/\s*(\d+)/);
-  if (fraction) return Number(fraction[1]) / Number(fraction[2]);
-
-  const value = normalizedWeight.match(/\d+(?:\.\d+)?/)?.[0];
-  return value ? Number(value) : undefined;
-};
-
-interface InventoryEntry {
-  name: string;
-  count: number;
-  editableCount: number;
-  type: string;
-  weight?: string;
-  details: string;
-  sourcePack?: string;
-  sourceName: string;
-}
-
-interface SearchInventoryItem {
-  _id: string;
-  name: string;
-  count?: number;
-  weight?: string;
-  detail?: string;
-  description?: string;
-  category?: string;
-  type?: string;
-  damage?: string | null;
-  damageType?: string | null;
-  classArmor?: string;
-  needStrong?: number;
-  Secrecy?: boolean;
-  properties?: { name: string }[];
-  skills?: unknown[];
-}
-
 interface AppliedLevelChange {
   level: number;
   abilityScoreIncrease?: AbilityKey;
@@ -440,85 +187,6 @@ interface AppliedLevelChange {
   addedSpellIds: string[];
   addedFeatId?: string;
 }
-
-const getInventoryTypeLabel = (type?: string) => {
-  if (type?.toLocaleLowerCase('ru-RU') === 'item') return 'Предмет';
-  return type || 'Снаряжение';
-};
-
-const getInventoryEntryFromSearchItem = (
-  item: SearchInventoryItem,
-  count: number,
-  editableCount: number,
-  sourceName: string,
-  sourcePack?: string,
-): InventoryEntry => {
-  if (item.damage !== undefined) {
-    return {
-      name: item.name,
-      count,
-      editableCount,
-      sourceName,
-      type: 'Оружие',
-      weight: item.weight,
-      details: `Урон: ${item.damage ?? '—'} ${item.damageType ?? ''}. ${item.properties?.map((property) => property.name).join(', ') || 'Без особых свойств.'}`,
-      sourcePack,
-    };
-  }
-
-  if (item.classArmor) {
-    return {
-      name: item.name,
-      count,
-      editableCount,
-      sourceName,
-      type: 'Броня',
-      weight: item.weight,
-      details: `КД: ${item.classArmor}. Требование Силы: ${item.needStrong || 'нет'}. Помеха скрытности: ${item.Secrecy ? 'да' : 'нет'}.`,
-      sourcePack,
-    };
-  }
-
-  return {
-    name: item.name,
-    count,
-    editableCount,
-    sourceName,
-    type: getInventoryTypeLabel(item.category || item.type),
-    weight: item.weight,
-    details: item.detail || item.description || 'Описание отсутствует в справочнике.',
-    sourcePack,
-  };
-};
-
-const mergeInventoryEntries = (entries: InventoryEntry[]): InventoryEntry[] => {
-  const entriesByName = new Map<string, InventoryEntry>();
-
-  entries.forEach((entry) => {
-    const key = normalize(entry.name);
-    const current = entriesByName.get(key);
-    if (!current) {
-      entriesByName.set(key, { ...entry, sourceName: entry.name });
-      return;
-    }
-
-    const sourcePacks = [current.sourcePack, entry.sourcePack]
-      .flatMap((sourcePack) => sourcePack?.split(', ') ?? []);
-    const sourcePack = [...new Set(sourcePacks)].join(', ') || undefined;
-    const entryWithDetails = !current.weight && entry.weight ? entry : current;
-
-    entriesByName.set(key, {
-      ...entryWithDetails,
-      name: current.name,
-      sourceName: current.name,
-      count: current.count + entry.count,
-      editableCount: current.editableCount + entry.editableCount,
-      sourcePack,
-    });
-  });
-
-  return [...entriesByName.values()];
-};
 
 export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetProps>(({
   race,
@@ -589,7 +257,6 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
   const [inventorySearchLoading, setInventorySearchLoading] = useState(false);
   const [inventorySearchError, setInventorySearchError] = useState<string | null>(null);
   const [inventoryRemovalCounts, setInventoryRemovalCounts] = useState<Record<string, number>>({});
-  const [journalPageIndex, setJournalPageIndex] = useState(0);
   const { data: skillsData, loading: skillsLoading } = useFetch(fetchSkills);
   const { data: featsData, loading: featsLoading } = useFetch(fetchFeats);
   const { data: weaponsData } = useFetch(fetchWeapons);
@@ -1216,478 +883,19 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
 
   useImperativeHandle(ref, () => ({ saveCharacter: handleSaveCharacter }));
 
-  const basicTab = (
-    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, minmax(0, 1fr))' }, gap: 2 }}>
-      <SummaryCard title="Раса">
-        <Typography variant="h5">{race.name}</Typography>
-        <Typography color="text.secondary" sx={{ mt: 0.75 }}>
-          {race.description}
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1.5 }}>
-          <Chip label={`Размер: ${race.size}`} size="small" />
-          <Chip label={`Скорость: ${race.speed} фт.`} size="small" />
-          {race.ability_bonuses.map(({ ability, bonus }) => (
-            <Chip key={ability} label={`+${bonus} ${ability}`} color="secondary" size="small" />
-          ))}
-        </Box>
-        <Typography variant="subtitle2" sx={{ mt: 2 }}>
-          Языки
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          {race.languages.map((language) => language.name).join(', ') || 'Нет данных'}
-        </Typography>
-        <Typography variant="subtitle2" sx={{ mt: 2 }}>
-          Черты расы
-        </Typography>
-        <FeatureList features={race.traits.map((trait) => ({ ...trait, level: 1 }))} />
-      </SummaryCard>
+  const basicTab = <BasicTab race={race} characterClass={characterClass} characterLevel={characterLevel} selectedSubclass={selectedSubclass} classBackgroundImage={classBackgroundImage} />;
+  const combatTab = <CombatTab selectedWeapons={selectedWeapons} selectedArmors={selectedArmors} characterLevel={characterLevel} effectiveSpellcasting={effectiveSpellcasting} classConfiguration={classConfiguration} kiPoints={kiPoints} slotResetVersion={slotResetVersion} currentLevelSlots={currentLevelSlots} remainingSpellSlots={remainingSpellSlots} maximumAvailableSpellLevel={maximumAvailableSpellLevel} unlockedSubclassSpells={unlockedSubclassSpells} onRestoreSlots={() => setSlotResetVersion((version) => version + 1)} onSpellSlotAvailabilityChange={setRemainingSpellSlots} />;
+  const socialTab = <SocialTab background={background} backgroundSkills={backgroundSkills} skillsLoading={skillsLoading} allSkills={allSkills} proficientSkills={proficientSkills} userSelectedSkills={userSelectedSkills} totalScores={totalScores} proficiencyBonus={proficiencyBonus} alignment={alignment} personality={personality} abilityKeyFromName={abilityKeyFromName} />;
+  const inventoryTab = <InventoryTab carriedWeight={carriedWeight} carryingCapacity={carryingCapacity} isOverCarryingCapacity={isOverCarryingCapacity} hasItemsWithoutWeight={hasItemsWithoutWeight} currency={currency} currencyValueCp={currencyValueCp} coinCount={coinCount} currencyWeight={currencyWeight} inventoryEntries={inventoryEntries} removalCounts={inventoryRemovalCounts} onOpenAddItem={() => setIsInventoryDialogOpen(true)} onCurrencyChange={onCurrencyChange} onRemovalCountChange={(key, count) => setInventoryRemovalCounts((counts) => ({ ...counts, [key]: count }))} onRemoveItem={removeInventoryItem} />;
 
-      <SummaryCard title="Класс" backgroundImage={classBackgroundImage}>
-        <Typography variant="h5">{characterClass.name}</Typography>
-        <Typography color="text.secondary" sx={{ mt: 0.75 }}>
-          {characterClass.description}
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1.5 }}>
-          <Chip label={`Хиты: ${characterClass.hit_dice}`} color="secondary" size="small" />
-          <Chip label={`Основная характеристика: ${characterClass.primary_ability}`} size="small" />
-          {selectedSubclass && <Chip label={`Подкласс: ${selectedSubclass.name}`} color="primary" size="small" />}
-        </Box>
-        <Typography variant="subtitle2" sx={{ mt: 2 }}>
-          Владения
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Доспехи: {characterClass.proficiencies.armor.join(', ') || 'нет'}
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Оружие: {characterClass.proficiencies.weapons.join(', ') || 'нет'}
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Инструменты: {characterClass.proficiencies.tools.join(', ') || 'нет'}
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Спасброски: {characterClass.proficiencies.saving_throws.join(', ')}
-        </Typography>
-        <Typography variant="subtitle2" sx={{ mt: 2 }}>
-          Умения класса
-        </Typography>
-        <FeatureList features={characterClass.features} characterLevel={characterLevel} />
-        {selectedSubclass && (
-          <>
-            <Typography variant="subtitle2" sx={{ mt: 2 }}>
-              Подкласс: {selectedSubclass.name}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, whiteSpace: 'pre-line' }}>
-              {selectedSubclass.description}
-            </Typography>
-            <Typography variant="subtitle2" sx={{ mt: 1.5 }}>
-              Особенности подкласса
-            </Typography>
-            <FeatureList features={selectedSubclass.features} characterLevel={characterLevel} />
-          </>
-        )}
-      </SummaryCard>
-
-    </Box>
-  );
-
-  const combatTab = (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <SummaryCard title="Оружие и броня">
-        {selectedWeapons.length > 0 && (
-          <>
-            <Typography variant="subtitle2">Оружие</Typography>
-            <List dense disablePadding>
-              {selectedWeapons.map((weapon: Weapon) => (
-                <ListItem key={weapon._id} disableGutters>
-                  <ListItemText
-                    primary={weapon.name}
-                    secondary={`${weapon.damage ?? '—'} ${weapon.damageType ?? ''} · ${weapon.properties.map((property) => property.name).join(', ') || 'без свойств'}`}
-                  />
-                </ListItem>
-              ))}
-            </List>
-          </>
-        )}
-        {selectedArmors.length > 0 && (
-          <>
-            <Typography variant="subtitle2" sx={{ mt: 1 }}>Броня</Typography>
-            <List dense disablePadding>
-              {selectedArmors.map((armor: Armor) => (
-                <ListItem key={armor._id} disableGutters>
-                  <ListItemText
-                    primary={armor.name}
-                    secondary={`КД: ${armor.classArmor}; Сила: ${armor.needStrong || 'нет'}; Помеха скрытности: ${armor.Secrecy ? 'да' : 'нет'}`}
-                  />
-                </ListItem>
-              ))}
-            </List>
-          </>
-        )}
-        {selectedWeapons.length === 0 && selectedArmors.length === 0 && (
-          <Typography variant="body2" color="text.secondary">Снаряжение не выбрано.</Typography>
-        )}
-      </SummaryCard>
-
-      <SummaryCard title="Магия">
-        <Box sx={{ display: 'flex', justifyContent: 'flex-start', mb: 1 }}>
-          <Button size="small" variant="outlined" onClick={() => setSlotResetVersion((version) => version + 1)}>
-            Восстановить ячейки
-          </Button>
-        </Box>
-        {kiPoints > 0 && (
-          <>
-            <Typography variant="subtitle2">Ци: {kiPoints}</Typography>
-            <KiPoints key={`ki-${characterLevel}-${kiPoints}-${slotResetVersion}`} points={kiPoints} />
-            <Divider sx={{ my: 2 }} />
-          </>
-        )}
-        {effectiveSpellcasting ? (
-          <>
-            <Typography variant="body2" color="text.secondary">
-              Базовая характеристика: {effectiveSpellcasting.ability}. Фокус: {effectiveSpellcasting.focus || 'не указан'}.
-            </Typography>
-            <Typography variant="subtitle2" sx={{ mt: 2 }}>Ячейки на {characterLevel}-м уровне</Typography>
-            <SpellSlots
-              key={`spell-slots-${characterLevel}-${slotResetVersion}`}
-              slots={currentLevelSlots}
-              onAvailabilityChange={setRemainingSpellSlots}
-            />
-            <Divider sx={{ my: 2 }} />
-            <SpellList title="Заговоры" spells={classConfiguration.cantrips} />
-            <SpellList
-              title="Заклинания"
-              spells={classConfiguration.spells1}
-              maximumAvailableSpellLevel={maximumAvailableSpellLevel}
-              availableSlots={remainingSpellSlots}
-            />
-            {unlockedSubclassSpells.length > 0 && (
-              <>
-                <Divider sx={{ my: 2 }} />
-                <Typography variant="subtitle2">Заклинания подкласса</Typography>
-                {unlockedSubclassSpells.map(({ level_requirement, spells }) => (
-                  <Box key={level_requirement} sx={{ mt: 1 }}>
-                    <Chip label={`${level_requirement}-й уровень`} size="small" variant="outlined" />
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                      {spells.join(', ')}
-                    </Typography>
-                  </Box>
-                ))}
-              </>
-            )}
-          </>
-        ) : (
-          <Typography variant="body2" color="text.secondary">Этот класс не использует заклинания.</Typography>
-        )}
-      </SummaryCard>
-
-    </Box>
-  );
-
-  const personalitySections: Array<{ title: string; values: string[] }> = [
-    { title: 'Черты характера', values: personality.traits },
-    { title: 'Идеалы', values: personality.ideals },
-    { title: 'Привязанности', values: personality.bonds },
-    { title: 'Слабости', values: personality.flaws },
-  ];
-
-  const socialTab = (
-    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, minmax(0, 1fr))' }, gap: 2 }}>
-      <SummaryCard title="Навыки">
-        {backgroundSkills.length > 0 && (
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-            Происхождение «{background.name}»: {backgroundSkills.join(', ')}
-          </Typography>
-        )}
-        {skillsLoading ? (
-          <Typography variant="body2" color="text.secondary">Загрузка навыков…</Typography>
-        ) : allSkills.length > 0 ? (
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 1 }}>
-            {allSkills.map((skill) => {
-              const selected = proficientSkills.has(normalize(skill.name));
-              const selectedByUser = userSelectedSkills.has(normalize(skill.name));
-              const abilityKey = abilityKeyFromName(skill.ability);
-              const abilityModifier = abilityKey
-                ? Math.floor((totalScores[abilityKey] - 10) / 2)
-                : 0;
-              const modifier = abilityModifier + (selected ? proficiencyBonus : 0);
-
-              return (
-                <Paper
-                  key={skill._id}
-                  variant="outlined"
-                  sx={{
-                    p: 1,
-                    borderColor: selected ? 'primary.main' : 'divider',
-                    backgroundColor: selected ? 'action.selected' : 'background.paper',
-                  }}
-                >
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}>
-                    <Box>
-                      <Typography variant="subtitle2">{skill.name}</Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {skill.ability}
-                        {selectedByUser ? ' · выбрано пользователем' : selected ? ' · владение' : ''}
-                      </Typography>
-                    </Box>
-                    <Box sx={{ textAlign: 'right' }}>
-                      <Typography variant="h6" color="secondary.main">
-                        {modifier >= 0 ? `+${modifier}` : modifier}
-                      </Typography>
-                      {selected && (
-                        <Chip
-                          label={selectedByUser ? 'Выбрано' : 'Владение'}
-                          color="primary"
-                          size="small"
-                        />
-                      )}
-                    </Box>
-                  </Box>
-                </Paper>
-              );
-            })}
-          </Box>
-        ) : (
-          <Typography variant="body2" color="text.secondary">Справочник навыков недоступен.</Typography>
-        )}
-      </SummaryCard>
-      <SummaryCard title="Характер и мировоззрение">
-        <Chip label={`${alignment.name} (${alignment.abbreviation})`} color="primary" sx={{ mb: 1 }} />
-        <Typography variant="body2" color="text.secondary">{alignment.description}</Typography>
-        {personalitySections.map(({ title, values }) => (
-          <Box key={title} sx={{ mt: 2 }}>
-            <Typography variant="subtitle2">{title}</Typography>
-            <List dense disablePadding>
-              {values.map((value) => <ListItem key={value} disableGutters><ListItemText primary={value} /></ListItem>)}
-            </List>
-          </Box>
-        ))}
-      </SummaryCard>
-    </Box>
-  );
-
-  const inventoryTab = (
-    <Box>
-      <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2 }}>
-          <Box>
-            <Typography variant="subtitle2" color="text.secondary">
-              Общий вес
-            </Typography>
-            <Typography variant="h4">
-              <Box component="span" sx={{ color: isOverCarryingCapacity ? 'error.main' : 'secondary.main' }}>
-                {carriedWeight.toLocaleString('ru-RU', { maximumFractionDigits: 2 })}
-              </Box>
-              {' / '}{carryingCapacity.toLocaleString('ru-RU')} фнт.
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Максимальная нагрузка рассчитывается как Сила × 15.
-            </Typography>
-          </Box>
-          <Button variant="contained" onClick={() => setIsInventoryDialogOpen(true)}>
-            Добавить предмет
-          </Button>
-        </Box>
-        {hasItemsWithoutWeight && (
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            В итог не включены предметы без веса в справочнике.
-          </Typography>
-        )}
-        {isOverCarryingCapacity && (
-          <Typography variant="body2" color="error.main" sx={{ mt: 0.5 }}>
-            Превышен максимальный переносимый вес.
-          </Typography>
-        )}
-      </Paper>
-
-      <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
-        <Typography variant="subtitle1" sx={{ mb: 1.5 }}>Кошелёк</Typography>
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', sm: 'repeat(5, minmax(0, 1fr))' },
-            gap: 1.25,
-          }}
-        >
-          {([
-            ['platinum', 'Платина'],
-            ['gold', 'Золото'],
-            ['electrum', 'Электрум'],
-            ['silver', 'Серебро'],
-            ['copper', 'Медь'],
-          ] as Array<[keyof CharacterCurrency, string]>).map(([key, label]) => (
-            <TextField
-              key={key}
-              label={label}
-              type="number"
-              value={currency[key] ?? 0}
-              onChange={(event) => {
-                const value = Number(event.target.value);
-                if (!Number.isFinite(value)) return;
-                onCurrencyChange?.({ ...currency, [key]: Math.max(0, Math.floor(value)) });
-              }}
-              slotProps={{ htmlInput: { min: 0, step: 1 } }}
-              size="small"
-              disabled={!onCurrencyChange}
-            />
-          ))}
-        </Box>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
-          Всего: {currencyValueCp.toLocaleString('ru-RU')} мм · {(currencyValueCp / 100).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} зм
-          {coinCount > 0 && ` · Вес монет: ${currencyWeight.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} фнт.`}
-        </Typography>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-          Курс: 10 мм = 1 см, 5 см = 1 эм, 2 эм = 1 зм, 10 зм = 1 пм. 50 монет весят 1 фнт.
-        </Typography>
-      </Paper>
-
-      {inventoryEntries.length > 0 ? (
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(3, minmax(0, 1fr))' },
-            gap: 2,
-          }}
-        >
-          {inventoryEntries.map((entry, index) => {
-            const entryKey = `${normalize(entry.sourceName)}-${index}`;
-            const removalCount = Math.min(
-              entry.editableCount,
-              Math.max(1, inventoryRemovalCounts[entryKey] ?? 1),
-            );
-
-            return (
-            <Card key={entryKey} component="article" variant="outlined" sx={{ height: '100%' }}>
-              <CardContent>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, mb: 1 }}>
-                  <Typography variant="h6" component="h2">{entry.name}</Typography>
-                  {entry.count > 1 && <Chip label={`×${entry.count}`} color="primary" size="small" />}
-                </Box>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mb: 1 }}>
-                  <Chip label={entry.type} size="small" variant="outlined" />
-                  <Chip label={entry.weight ? `${entry.weight} × ${entry.count}` : 'Вес неизвестен'} color="secondary" size="small" />
-                  {entry.sourcePack && <Chip label={`Набор: ${entry.sourcePack}`} size="small" />}
-                </Box>
-                <Typography variant="body2" color="text.secondary">
-                  {entry.details}
-                </Typography>
-                <Divider sx={{ my: 1.5 }} />
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                  {entry.editableCount > 1 && (
-                    <TextField
-                      label="Количество"
-                      type="number"
-                      value={removalCount}
-                      onChange={(event) => {
-                        const value = Number(event.target.value);
-                        if (Number.isFinite(value)) {
-                          setInventoryRemovalCounts((counts) => ({
-                            ...counts,
-                            [entryKey]: Math.max(1, Math.min(entry.editableCount, value)),
-                          }));
-                        }
-                      }}
-                      slotProps={{ htmlInput: { min: 1, max: entry.editableCount, step: 1 } }}
-                      size="small"
-                      sx={{ width: 132 }}
-                    />
-                  )}
-                  <Button size="small" color="error" onClick={() => removeInventoryItem(entry, removalCount)}>
-                    Удалить
-                  </Button>
-                  {entry.editableCount > removalCount && (
-                    <Button size="small" color="error" onClick={() => removeInventoryItem(entry, entry.editableCount)}>
-                      Удалить всё
-                    </Button>
-                  )}
-                </Box>
-              </CardContent>
-            </Card>
-            );
-          })}
-        </Box>
-      ) : (
-        <SummaryCard title="Инвентарь">
-          <Typography variant="body2" color="text.secondary">Снаряжение не выбрано.</Typography>
-        </SummaryCard>
-      )}
-
-    </Box>
-  );
-
-  const selectedJournalPage = journalPages[journalPageIndex];
-  const canEditJournal = Boolean(characterId && onJournalPagesChange);
-  const addJournalPage = () => {
-    if (!onJournalPagesChange) return;
-
-    const id = typeof crypto?.randomUUID === 'function'
-      ? crypto.randomUUID()
-      : `journal-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    onJournalPagesChange([
-      ...journalPages,
-      { id, title: `Страница ${journalPages.length + 1}`, content: '' },
-    ]);
-    setJournalPageIndex(journalPages.length);
-  };
-  const updateJournalPage = (id: string, updates: Partial<CharacterJournalPage>) => {
-    onJournalPagesChange?.(journalPages.map((page) => (page.id === id ? { ...page, ...updates } : page)));
-  };
-  const removeJournalPage = (id: string) => {
-    const nextPages = journalPages.filter((page) => page.id !== id);
-    onJournalPagesChange?.(nextPages);
-    setJournalPageIndex((index) => Math.max(0, Math.min(index, nextPages.length - 1)));
-  };
   const journalTab = (
-    <SummaryCard title="Дневник">
-      {!canEditJournal ? (
-        <Alert severity="info">Дневник станет доступен после сохранения персонажа.</Alert>
-      ) : (
-        <>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, alignItems: 'center', mb: 2, flexWrap: 'wrap' }}>
-            <Typography variant="body2" color="text.secondary">Храните заметки кампании, цели и важные события.</Typography>
-            <Button variant="outlined" size="small" onClick={addJournalPage}>Добавить страницу</Button>
-          </Box>
-          {journalPages.length === 0 ? (
-            <Typography color="text.secondary">В дневнике пока нет страниц.</Typography>
-          ) : (
-            <>
-              <Tabs
-                value={Math.min(journalPageIndex, journalPages.length - 1)}
-                onChange={(_, value) => setJournalPageIndex(value)}
-                variant="scrollable"
-                allowScrollButtonsMobile
-                sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}
-              >
-                {journalPages.map((page, index) => <Tab key={page.id} label={page.title || `Страница ${index + 1}`} />)}
-              </Tabs>
-              {selectedJournalPage && (
-                <Box sx={{ display: 'grid', gap: 2 }}>
-                  <TextField
-                    label="Название страницы"
-                    value={selectedJournalPage.title}
-                    onChange={(event) => updateJournalPage(selectedJournalPage.id, { title: event.target.value })}
-                    fullWidth
-                  />
-                  <JournalEditor
-                    pageId={selectedJournalPage.id}
-                    value={selectedJournalPage.content}
-                    onChange={(content) => updateJournalPage(selectedJournalPage.id, { content })}
-                  />
-                  <Typography variant="caption" color="text.secondary" align="right">
-                    {selectedJournalPage.content.length} / 20000
-                  </Typography>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap' }}>
-                    <Button color="error" onClick={() => removeJournalPage(selectedJournalPage.id)}>Удалить страницу</Button>
-                    <Button variant="contained" onClick={() => void handleSaveCharacter()} disabled={saving}>
-                      Сохранить дневник
-                    </Button>
-                  </Box>
-                </Box>
-              )}
-            </>
-          )}
-        </>
-      )}
-    </SummaryCard>
+    <JournalTab
+      characterId={characterId}
+      pages={journalPages}
+      saving={saving}
+      onPagesChange={onJournalPagesChange}
+      onSave={() => void handleSaveCharacter()}
+    />
   );
 
   const tabPanels = [basicTab, combatTab, socialTab, inventoryTab, journalTab];
@@ -2222,94 +1430,25 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
           </Button>
         </DialogActions>
       </Dialog>
-      <Dialog
+      <InventorySearchDialog
         open={isInventoryDialogOpen}
+        query={inventorySearchQuery}
+        loading={inventorySearchLoading}
+        error={inventorySearchError}
+        items={inventorySearchResults}
+        onQueryChange={setInventorySearchQuery}
+        onAddItem={addCustomInventoryItem}
         onClose={() => setIsInventoryDialogOpen(false)}
-        fullWidth
-        maxWidth="md"
-      >
-        <DialogTitle>Добавление предмета</DialogTitle>
-        <DialogContent dividers>
-          <TextField
-            autoFocus
-            label="Поиск по названию"
-            value={inventorySearchQuery}
-            onChange={(event) => setInventorySearchQuery(event.target.value)}
-            fullWidth
-          />
-          {inventorySearchQuery.trim().length < 2 && (
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-              Введите не менее двух символов, чтобы найти предметы во всём справочнике.
-            </Typography>
-          )}
-          {inventorySearchLoading && (
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-              Поиск предметов…
-            </Typography>
-          )}
-          {inventorySearchError && <Alert severity="error" sx={{ mt: 2 }}>{inventorySearchError}</Alert>}
-          {!inventorySearchLoading && inventorySearchQuery.trim().length >= 2 && !inventorySearchError && (
-            inventorySearchResults.length > 0 ? (
-              <Box
-                sx={{
-                  display: 'grid',
-                  gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
-                  gap: 2,
-                  mt: 2,
-                }}
-              >
-                {inventorySearchResults.map((item) => {
-                  const entry = getInventoryEntryFromSearchItem(item, 1, 1, item.name);
-                  return (
-                    <Card key={item._id} variant="outlined">
-                      <CardContent>
-                        <Typography variant="h6">{entry.name}</Typography>
-                        <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', my: 1 }}>
-                          <Chip label={entry.type} size="small" variant="outlined" />
-                          {entry.weight && <Chip label={`${entry.weight} фнт.`} size="small" color="secondary" />}
-                        </Box>
-                        <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-line' }}>
-                          {entry.details}
-                        </Typography>
-                        <Button size="small" variant="contained" sx={{ mt: 2 }} onClick={() => addCustomInventoryItem(item)}>
-                          Добавить
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </Box>
-            ) : (
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                По этому названию ничего не найдено.
-              </Typography>
-            )
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setIsInventoryDialogOpen(false)}>Готово</Button>
-        </DialogActions>
-      </Dialog>
-      <Snackbar
-        open={Boolean(saveError || savedCharacterId)}
-        autoHideDuration={5000}
+      />
+      <SaveNotification
+        characterId={characterId}
+        savedCharacterId={savedCharacterId}
+        error={saveError}
         onClose={() => {
           setSaveError(null);
           setSavedCharacterId(null);
         }}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-      >
-        <Alert
-          severity={saveError ? 'error' : 'success'}
-          variant="filled"
-          onClose={() => {
-            setSaveError(null);
-            setSavedCharacterId(null);
-          }}
-        >
-          {saveError ?? `${characterId ? 'Изменения сохранены.' : 'Персонаж создан.'} Идентификатор: ${savedCharacterId}`}
-        </Alert>
-      </Snackbar>
+      />
     </Box>
   );
 });
