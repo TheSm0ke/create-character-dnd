@@ -1,5 +1,6 @@
 import { get, patch, post, remove } from './apiClient';
 import type { AbilityKey } from './classes';
+import type { Spell } from './spells';
 
 export interface CharacterEquipmentItem {
   name: string;
@@ -61,6 +62,7 @@ export interface CreateCharacterPayload {
   spells: {
     cantrip_ids: string[];
     spell_ids: string[];
+    custom_spells?: Spell[];
   };
   journal_pages?: CharacterJournalPage[];
 }

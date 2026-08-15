@@ -157,8 +157,9 @@ const CharacterDetails = () => {
         ]);
 
         if (!cancelled) {
-          setCantrips(loadedCantrips);
-          setSpells1(loadedSpells1);
+          const customSpells = character.spells.custom_spells ?? [];
+          setCantrips([...loadedCantrips, ...customSpells.filter((spell) => spell.level === 'Заговор')]);
+          setSpells1([...loadedSpells1, ...customSpells.filter((spell) => spell.level !== 'Заговор')]);
           setSpellsError(null);
         }
       } catch (error) {

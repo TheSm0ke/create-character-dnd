@@ -859,8 +859,9 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
         currency,
       },
       spells: {
-        cantrip_ids: classConfiguration.cantrips.map((spell) => spell._id),
-        spell_ids: classConfiguration.spells1.map((spell) => spell._id),
+        cantrip_ids: classConfiguration.cantrips.filter((spell) => !spell._id.startsWith('custom-')).map((spell) => spell._id),
+        spell_ids: classConfiguration.spells1.filter((spell) => !spell._id.startsWith('custom-')).map((spell) => spell._id),
+        custom_spells: [...classConfiguration.cantrips, ...classConfiguration.spells1].filter((spell) => spell._id.startsWith('custom-')),
       },
       journal_pages: journalPages,
     };
@@ -884,7 +885,7 @@ export const CharacterSheet = forwardRef<CharacterSheetHandle, CharacterSheetPro
   useImperativeHandle(ref, () => ({ saveCharacter: handleSaveCharacter }));
 
   const basicTab = <BasicTab race={race} characterClass={characterClass} characterLevel={characterLevel} selectedSubclass={selectedSubclass} classBackgroundImage={classBackgroundImage} />;
-  const combatTab = <CombatTab selectedWeapons={selectedWeapons} selectedArmors={selectedArmors} characterLevel={characterLevel} effectiveSpellcasting={effectiveSpellcasting} classConfiguration={classConfiguration} kiPoints={kiPoints} slotResetVersion={slotResetVersion} currentLevelSlots={currentLevelSlots} remainingSpellSlots={remainingSpellSlots} maximumAvailableSpellLevel={maximumAvailableSpellLevel} unlockedSubclassSpells={unlockedSubclassSpells} onRestoreSlots={() => setSlotResetVersion((version) => version + 1)} onSpellSlotAvailabilityChange={setRemainingSpellSlots} />;
+  const combatTab = <CombatTab selectedWeapons={selectedWeapons} selectedArmors={selectedArmors} characterLevel={characterLevel} effectiveSpellcasting={effectiveSpellcasting} classConfiguration={classConfiguration} kiPoints={kiPoints} slotResetVersion={slotResetVersion} currentLevelSlots={currentLevelSlots} remainingSpellSlots={remainingSpellSlots} maximumAvailableSpellLevel={maximumAvailableSpellLevel} unlockedSubclassSpells={unlockedSubclassSpells} onRestoreSlots={() => setSlotResetVersion((version) => version + 1)} onSpellSlotAvailabilityChange={setRemainingSpellSlots} onAddCustomSpell={(spell, cantrip) => onClassConfigurationChange?.({ ...classConfiguration, [cantrip ? 'cantrips' : 'spells1']: [...classConfiguration[cantrip ? 'cantrips' : 'spells1'], spell] })} />;
   const socialTab = <SocialTab background={background} backgroundSkills={backgroundSkills} skillsLoading={skillsLoading} allSkills={allSkills} proficientSkills={proficientSkills} userSelectedSkills={userSelectedSkills} totalScores={totalScores} proficiencyBonus={proficiencyBonus} alignment={alignment} personality={personality} abilityKeyFromName={abilityKeyFromName} />;
   const inventoryTab = <InventoryTab carriedWeight={carriedWeight} carryingCapacity={carryingCapacity} isOverCarryingCapacity={isOverCarryingCapacity} hasItemsWithoutWeight={hasItemsWithoutWeight} currency={currency} currencyValueCp={currencyValueCp} coinCount={coinCount} currencyWeight={currencyWeight} inventoryEntries={inventoryEntries} removalCounts={inventoryRemovalCounts} onOpenAddItem={() => setIsInventoryDialogOpen(true)} onCurrencyChange={onCurrencyChange} onRemovalCountChange={(key, count) => setInventoryRemovalCounts((counts) => ({ ...counts, [key]: count }))} onRemoveItem={removeInventoryItem} />;
 

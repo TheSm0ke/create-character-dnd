@@ -1,10 +1,12 @@
 import { Box, Button, Card, CardContent, Chip, Divider, List, ListItem, ListItemText, Paper, TextField, Typography } from '@mui/material';
+import { useState } from 'react';
 import type { Alignment, Armor, Background, CharacterCurrency, Class, Race, Weapon } from '../../../../api';
 import type { AbilityKey } from '../../../../api/classes';
 import type { AbilityScores } from '../select-abilities';
 import type { ClassConfiguration } from '../select-class/classSelection';
 import { FeatureList, KiPoints, SpellSlots, SummaryCard } from './SheetPrimitives';
 import { SpellList } from './SpellList';
+import { CustomSpellDialog } from './CustomSpellDialog';
 import type { InventoryEntry, SearchInventoryItem } from './inventoryUtils';
 
 type Skill = { _id: string; name: string; ability: string };
@@ -80,13 +82,16 @@ interface CombatTabProps {
   unlockedSubclassSpells: Array<{ level_requirement: number; spells: string[] }>;
   onRestoreSlots: () => void;
   onSpellSlotAvailabilityChange: (slots: number[]) => void;
+  onAddCustomSpell: (spell: import('../../../../api').Spell, cantrip: boolean) => void;
 }
 
 export const CombatTab = ({
   selectedWeapons, selectedArmors, characterLevel, effectiveSpellcasting, classConfiguration, kiPoints,
   slotResetVersion, currentLevelSlots, remainingSpellSlots, maximumAvailableSpellLevel, unlockedSubclassSpells,
-  onRestoreSlots, onSpellSlotAvailabilityChange,
-}: CombatTabProps) => (
+  onRestoreSlots, onSpellSlotAvailabilityChange, onAddCustomSpell,
+}: CombatTabProps) => {
+  const [isCustomSpellDialogOpen, setIsCustomSpellDialogOpen] = useState(false);
+  return (
   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
     <SummaryCard title="Оружие и броня">
       {selectedWeapons.length > 0 && (
@@ -102,7 +107,7 @@ export const CombatTab = ({
       {selectedWeapons.length === 0 && selectedArmors.length === 0 && <Typography variant="body2" color="text.secondary">Снаряжение не выбрано.</Typography>}
     </SummaryCard>
     <SummaryCard title="Магия">
-      <Box sx={{ display: 'flex', justifyContent: 'flex-start', mb: 1 }}><Button size="small" variant="outlined" onClick={onRestoreSlots}>Восстановить ячейки</Button></Box>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}><Button size="small" variant="outlined" onClick={onRestoreSlots}>Восстановить ячейки</Button><Button size="small" variant="contained" onClick={() => setIsCustomSpellDialogOpen(true)}>Добавить заклинание</Button></Box>
       {kiPoints > 0 && <><Typography variant="subtitle2">Ци: {kiPoints}</Typography><KiPoints key={`ki-${characterLevel}-${kiPoints}-${slotResetVersion}`} points={kiPoints} /><Divider sx={{ my: 2 }} /></>}
       {effectiveSpellcasting ? (
         <>
@@ -118,8 +123,10 @@ export const CombatTab = ({
         </>
       ) : <Typography variant="body2" color="text.secondary">Этот класс не использует заклинания.</Typography>}
     </SummaryCard>
+    <CustomSpellDialog open={isCustomSpellDialogOpen} onClose={() => setIsCustomSpellDialogOpen(false)} onAdd={onAddCustomSpell} />
   </Box>
-);
+  );
+};
 
 interface SocialTabProps {
   background: Background;
